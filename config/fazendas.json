@@ -1,0 +1,10 @@
+{
+  "la-esperanza": {
+    "nome": "La Esperanza",
+    "pastos": "config/la-esperanza_pastos.geojson",
+    "limite": "config/la-esperanza_limite.geojson",
+    "inicio": "2025-11-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 40
+  }
+}

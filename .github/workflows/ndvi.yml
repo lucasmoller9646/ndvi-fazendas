@@ -1,0 +1,47 @@
+name: NDVI automático
+
+on:
+  schedule:
+    - cron: "17 15 * * *"   # todo dia às 12:17 de Assunção/Brasília (15:17 UTC)
+  workflow_dispatch:         # botão "Run workflow" para rodar na hora
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ndvi
+  cancel-in-progress: false
+
+jobs:
+  ndvi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Baixar e processar passagens novas do Sentinel-2
+        env:
+          CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
+          CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
+        run: python ndvi/run.py
+      - name: Gravar resultados no repositório
+        run: |
+          git config user.name "ndvi-bot"
+          git config user.email "ndvi-bot@users.noreply.github.com"
+          git add docs
+          if git diff --cached --quiet; then echo "sem novidades"; else git commit -m "NDVI: passagens até $(date -u +%F)" && git push; fi
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        uses: actions/deploy-pages@v4
