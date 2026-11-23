@@ -67,6 +67,17 @@ jobs:
           cd "$TMP" && git init -q -b imagens && git add -A && git -c user.name=ndvi-bot -c user.email=ndvi-bot@users.noreply.github.com commit -qm "mapas NDVI $(date -u +%F)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" imagens
 
+      - name: Senha da página (segredo SENHA_SITE; padrão 123321)
+        if: always()
+        env:
+          SENHA_SITE: ${{ secrets.SENHA_SITE }}
+        run: |
+          python - <<'PY'
+          import hashlib, json, os
+          s = os.environ.get('SENHA_SITE') or '123321'
+          json.dump({'sha256': hashlib.sha256(('ndvi-fazendas:' + s).encode()).hexdigest()}, open('docs/acesso.json', 'w'))
+          PY
+
       - uses: actions/configure-pages@v5
         if: always()
       - uses: actions/upload-pages-artifact@v3

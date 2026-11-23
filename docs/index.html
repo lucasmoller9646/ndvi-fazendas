@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
 <title>NDVI das Fazendas</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -15,11 +16,11 @@ header{padding:14px 18px 10px;display:flex;flex-wrap:wrap;gap:10px 22px;align-it
 h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
 .sub{color:var(--mut);font-size:12.5px}
 .ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-select,button{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
+select,button,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
 button{cursor:pointer}
-main{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:14px;padding:14px 18px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:14px;padding:14px 18px}
 @media (max-width:980px){main{grid-template-columns:1fr;padding:12px 16px}}
-#map{height:calc(100vh - 120px);min-height:420px;border-radius:10px;border:1px solid var(--line)}
+#map{height:calc(100vh - 130px);min-height:420px;border-radius:10px;border:1px solid var(--line)}
 @media (max-width:980px){#map{height:62vh}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 .side{display:flex;flex-direction:column;gap:14px;min-width:0}
@@ -35,27 +36,62 @@ tr.sel{background:color-mix(in srgb,var(--acc) 15%,transparent)!important}
 .tw{max-height:46vh;overflow:auto}
 .neg{color:var(--neg)}.pos{color:var(--pos)}
 .leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut)}
-.bar{height:10px;flex:1;border-radius:3px;background:linear-gradient(90deg,#a5784b 0%,#d7b46e 22%,#ebe18c 35%,#aacd6e 52%,#5faa4b 67%,#23783a 85%,#0a461e 100%)}
+.bar{height:10px;flex:1;border-radius:3px}
+.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin:3px 0 0;font-variant-numeric:tabular-nums}
 .chart svg{width:100%;height:170px;display:block}
 .muted{color:var(--mut);font-size:12px}
-.tag{display:inline-block;font-size:11px;padding:1px 6px;border-radius:9px;background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--acc)}
 .leaflet-container{background:#0d1314}
 .lbl{background:none;border:none;box-shadow:none;color:#fff;font-weight:600;font-size:10.5px;text-shadow:0 0 3px #000,0 0 2px #000}
 .lbl:before{display:none}
 tr.sub td{font-size:12.5px;color:var(--mut)}
 #obtb tr{cursor:default}
+/* exportar */
+.exp{position:relative}
+.exp>summary{list-style:none;cursor:pointer;border:1px solid var(--acc);color:var(--acc);border-radius:7px;padding:5px 10px;font-weight:600}
+.exp>summary::-webkit-details-marker{display:none}
+.exp .menu{position:absolute;right:0;top:calc(100% + 4px);z-index:1200;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;min-width:290px}
+.exp .menu button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 9px;border-radius:6px}
+.exp .menu button:hover{background:color-mix(in srgb,var(--acc) 10%,transparent)}
+.exp .menu small{display:block;color:var(--mut);font-size:11.5px}
+/* senha */
+#gate{position:fixed;inset:0;z-index:5000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+#gate .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:26px 24px;width:min(360px,100%);text-align:center}
+#gate h2{margin:0 0 4px;font-size:19px}
+#pin{font-size:28px;letter-spacing:12px;text-align:center;width:100%;padding:10px 6px;margin:16px 0 10px;font-variant-numeric:tabular-nums}
+#gate .go{width:100%;background:var(--acc);color:#fff;border-color:var(--acc);padding:9px;font-weight:600}
+#gerr{color:var(--neg);min-height:18px;font-size:12.5px;margin-top:8px}
+body.locked header,body.locked main{visibility:hidden}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="gate">
+  <form class="box" id="gform" autocomplete="off">
+    <h2>NDVI das Fazendas</h2>
+    <div class="muted">Digite a senha de 6 dígitos para ver os mapas.</div>
+    <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" aria-label="Senha de 6 dígitos" autofocus>
+    <label class="muted" style="display:flex;gap:6px;justify-content:center;align-items:center"><input type="checkbox" id="lemb" checked style="padding:0"> lembrar neste aparelho</label>
+    <button class="go" type="submit" style="margin-top:14px">Entrar</button>
+    <div id="gerr" role="alert"></div>
+  </form>
+</div>
 <header>
-  <div><h1 id="titulo">NDVI — La Esperanza</h1><div class="sub" id="sub">carregando…</div></div>
+  <div><h1 id="titulo">NDVI</h1><div class="sub" id="sub">carregando…</div></div>
   <div class="ctl">
     <label class="muted" for="faz">Fazenda</label><select id="faz"></select>
     <label class="muted" for="data">Imagem</label>
     <button id="prev" aria-label="Imagem anterior">‹</button><select id="data"></select><button id="next" aria-label="Próxima imagem">›</button>
     <label class="muted" for="ret">Retiro</label><select id="ret"><option value="">Todos</option></select>
+    <label class="muted" for="esc">Escala</label><select id="esc"><option value="max">Máximo contraste</option><option value="fixa">Fixa (−0,2 a 0,95)</option></select>
     <label class="muted"><input type="checkbox" id="opac" checked> NDVI sobre o satélite</label>
-    <label class="muted" id="obl" hidden><input type="checkbox" id="obr" checked> Áreas de trabalho</label>
+    <label class="muted" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho</label>
+    <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
+      <button data-x="tif">GeoTIFF do NDVI<small>valores em cada pixel de 10 m · abre no QGIS/ArcGIS</small></button>
+      <button data-x="kmz">KMZ para Google Earth<small>imagem colorida como na tela, já posicionada</small></button>
+      <button data-x="png">PNG colorido + georreferência<small>.png + .pgw + .prj em um .zip (QGIS)</small></button>
+      <button data-x="csv">Tabela dos pastos — esta imagem (CSV)</button>
+      <button data-x="serie">Série histórica de todos os pastos (CSV)</button>
+      <button data-x="obras" id="xobras" hidden>Avanço das áreas de trabalho (CSV)</button>
+    </div></details>
   </div>
 </header>
 <main>
@@ -67,8 +103,9 @@ tr.sub td{font-size:12.5px;color:var(--mut)}
         <div class="kpi"><b id="k2">–</b><span>variação vs. imagem anterior</span></div>
         <div class="kpi"><b id="k3">–</b><span>área sem nuvem</span></div>
       </div>
-      <div class="leg" style="margin-top:10px"><span>solo</span><div class="bar"></div><span>vigoroso</span></div>
-      <div class="muted" style="margin-top:4px">−0,2 · 0 · 0,2 · 0,35 · 0,5 · 0,65 · 0,8 · 0,95</div>
+      <div class="leg" style="margin-top:10px"><span>menor</span><div class="bar" id="bar"></div><span>maior</span></div>
+      <div class="ticks" id="ticks"></div>
+      <div class="muted" id="escnota" style="margin-top:3px"></div>
     </div>
     <div class="card" id="obcard" hidden>
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>Avanço das áreas de trabalho</b><span class="muted" id="obinfo"></span></div>
@@ -92,21 +129,51 @@ tr.sub td{font-size:12.5px;color:var(--mut)}
 const $=s=>document.querySelector(s);
 const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fdate=s=>{const [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
-const STOPS=[[-0.2,[120,80,50]],[0,[165,120,75]],[0.2,[215,180,110]],[0.35,[235,225,140]],[0.5,[170,205,110]],[0.65,[95,170,75]],[0.8,[35,120,50]],[0.95,[10,70,30]]];
-function col(v){if(v==null)return '#888';v=Math.max(-0.2,Math.min(0.95,v));for(let i=1;i<STOPS.length;i++){if(v<=STOPS[i][0]){const [a,ca]=STOPS[i-1],[b,cb]=STOPS[i],t=(v-a)/(b-a);return `rgb(${ca.map((c,k)=>Math.round(c+(cb[k]-c)*t)).join(',')})`}}return 'rgb(10,70,30)'}
-let OBJ=null,obLayer=null,obOpen={},IDX,D,GJ,map,img,layer,labels,sel=null,sortK='nome',sortA=true,passImgs=[];
+const st={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+/* ---------------- senha ---------------- */
+const SAL='ndvi-fazendas:';
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(SAL+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+let HASH=null;
+async function gate(){
+  try{HASH=(await (await fetch('acesso.json',{cache:'no-store'})).json()).sha256}catch(e){HASH=await sha('123321')}
+  if(st.get('ndvi_ok')===HASH||sessionStorage.getItem('ndvi_ok')===HASH){abrir();return}
+  $('#pin').focus();
+}
+$('#pin').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);$('#gerr').textContent='';if(e.target.value.length===6)$('#gform').requestSubmit()});
+$('#gform').onsubmit=async e=>{e.preventDefault();const v=$('#pin').value;
+  if(v.length!==6){$('#gerr').textContent='A senha tem 6 dígitos.';return}
+  if(await sha(v)===HASH){if($('#lemb').checked)st.set('ndvi_ok',HASH);try{sessionStorage.setItem('ndvi_ok',HASH)}catch(e){}abrir()}
+  else{$('#gerr').textContent='Senha incorreta.';$('#pin').value='';$('#pin').focus()}};
+let aberto=false;
+function abrir(){if(aberto)return;aberto=true;$('#gate').remove();document.body.classList.remove('locked');map.invalidateSize();init()}
+
+/* ---------------- cores e escala ---------------- */
+const RAMP=[[120,80,50],[165,120,75],[215,180,110],[235,225,140],[170,205,110],[95,170,75],[35,120,50],[10,70,30]];
+const LUT=new Uint8ClampedArray(256*3);
+for(let i=0;i<256;i++){const t=i/255*(RAMP.length-1),k=Math.min(RAMP.length-2,Math.floor(t)),f=t-k;for(let c=0;c<3;c++)LUT[i*3+c]=Math.round(RAMP[k][c]+(RAMP[k+1][c]-RAMP[k][c])*f)}
+$('#bar').style.background=`linear-gradient(90deg,${RAMP.map((c,i)=>`rgb(${c})`+` ${Math.round(i/(RAMP.length-1)*100)}%`).join(',')})`;
+let LO=-0.2,HI=0.95;
+function col(v){if(v==null)return '#888';const i=Math.max(0,Math.min(255,Math.round((v-LO)/(HI-LO)*255)));return `rgb(${LUT[i*3]},${LUT[i*3+1]},${LUT[i*3+2]})`}
+const q2v=q=>(q-1)/254*1.15-0.2;
+
+let OBJ=null,obLayer=null,obOpen={},IDX,D,GJ,FKEY,map,img,layer,labels,sel=null,sortK='nome',sortA=true,passImgs=[];
+let RAST=null; // {q:Uint8Array,W,H,data}
+let MASK=null; // máscara dos pastos (Uint8Array)
 map=L.map('map',{zoomSnap:0.25});
 L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Imagem de fundo: Esri, Maxar, Earthstar Geographics'}).addTo(map);
 labels=L.layerGroup().addTo(map);
 map.createPane('ndvi');map.getPane('ndvi').style.zIndex=350;
+$('#esc').value=st.get('ndvi_esc')||'max';
+
 async function init(){
   IDX=await (await fetch('data/fazendas.json',{cache:'no-store'})).json();
   for(const [k,v] of Object.entries(IDX)){const o=document.createElement('option');o.value=k;o.textContent=v.nome;$('#faz').appendChild(o)}
-  let k0=Object.keys(IDX)[0];try{k0=localStorage.getItem('ndvi_faz')||k0;if(!IDX[k0])k0=Object.keys(IDX)[0]}catch(e){}
+  let k0=st.get('ndvi_faz');if(!IDX[k0])k0=Object.keys(IDX)[0];
   $('#faz').value=k0;await loadFarm(k0);
 }
 async function loadFarm(k){
-  try{localStorage.setItem('ndvi_faz',k)}catch(e){}
+  st.set('ndvi_faz',k);FKEY=k;MASK=null;sel=null;
   D=await (await fetch(IDX[k].arquivo,{cache:'no-store'})).json();
   GJ=await (await fetch(D.pastos_geojson,{cache:'no-store'})).json();
   $('#titulo').textContent='NDVI — '+D.fazenda;
@@ -116,28 +183,73 @@ async function loadFarm(k){
   $('#data').innerHTML=passImgs.map((p,i)=>`<option value="${i}">${fdate(p.data)} · ${Math.round(p.limpo*100)}% limpo</option>`).reverse().join('');
   const [w,s,e,n]=D.bbox;map.fitBounds([[s,w],[n,e]],{padding:[10,10]});
   if(layer)layer.remove();
-  layer=L.geoJSON(GJ,{style:styleF,onEachFeature:(f,l)=>{l.on('click',()=>pick(f.properties.id));l.bindTooltip(()=>tip(f.properties),{sticky:true})}}).addTo(map);
-  if(obLayer){obLayer.remove();obLayer=null}OBJ=null;
+  layer=L.geoJSON(GJ,{style:styleF,onEachFeature:(f,l)=>{l.on('click',()=>pick(f.properties.id));l.bindTooltip(()=>tip(f.properties),{sticky:true})}});
+  if(obLayer){obLayer.remove();obLayer=null}OBJ=null;$('#obr').checked=false;
   if(D.obras&&D.obras_geojson){OBJ=await (await fetch(D.obras_geojson,{cache:'no-store'})).json();
-    obLayer=L.geoJSON(OBJ,{style:f=>({color:OBC(f.properties.area),weight:2.2,dashArray:'6 4',fill:false,opacity:.95}),interactive:false});
-    if($('#obr').checked)obLayer.addTo(map)}
-  $('#obl').hidden=!OBJ;$('#obcard').hidden=!OBJ;
+    obLayer=L.geoJSON(OBJ,{style:f=>({color:OBC(f.properties.area),weight:2.4,dashArray:'6 4',fillOpacity:0,opacity:.95}),
+      onEachFeature:(f,l)=>l.bindTooltip(()=>obTip(f.properties),{sticky:true})})}
+  $('#obl').hidden=!OBJ;$('#obcard').hidden=!OBJ;$('#xobras').hidden=!OBJ;
+  camadas();
   const ult=D.passagens[D.passagens.length-1];
   $('#upd').textContent=`Última passagem consultada: ${ult?fdate(ult.data):'–'}; página gerada em ${D.atualizado?.replace('T',' ').replace('Z',' UTC')}.`;
-  setDate(passImgs.length-1);
+  await setDate(passImgs.length-1);
 }
+/* pastos e áreas de trabalho não aparecem juntos */
+function camadas(){const ob=OBJ&&$('#obr').checked;
+  if(ob){layer.remove();obLayer.addTo(map)}else{if(obLayer)obLayer.remove();layer.addTo(map)}}
+
 function seriesAt(id,dateStr){const s=D.serie[id];if(!s)return null;let best=null;for(const r of s){if(r[0]<=dateStr)best=r;else break}return best}
 function prevOf(id,dateStr){const s=D.serie[id];if(!s)return null;let p=null;for(const r of s){if(r[0]<dateStr)p=r;else break}return p}
 function cur(){return passImgs[+$('#data').value]}
-function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
+function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,p10:r?r[2]:null,p90:r?r[3]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
 function styleF(f){const r=rowFor(f);const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
   return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:$('#opac').checked?0:(hide?0:0.85),fillColor:col(r.v)}}
 function tip(p){const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
-function setDate(i){
+
+/* ---------------- raster: lê o PNG de 8 bits e colore no navegador ---------------- */
+function loadImg(src){return new Promise((ok,err)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=err;im.src=src})}
+async function lerRaster(p){
+  const im=await loadImg(p.img);const W=im.naturalWidth,H=im.naturalHeight;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0);
+  const px=cx.getImageData(0,0,W,H).data;const q=new Uint8Array(W*H);
+  for(let i=0,j=0;i<q.length;i++,j+=4)q[i]=px[j+3]===0?0:px[j];
+  return {q,W,H,data:p.data,fmt:p.fmt};
+}
+function mascara(W,H){
+  if(MASK&&MASK.W===W&&MASK.H===H)return MASK.m;
+  const [w,s,e,n]=D.bbox;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.fillStyle='#fff';
+  const P=([x,y])=>[(x-w)/(e-w)*W,(n-y)/(n-s)*H];
+  for(const f of GJ.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+    cx.beginPath();for(const poly of polys)for(const ring of poly){ring.forEach((c,i)=>{const [a,b]=P(c);i?cx.lineTo(a,b):cx.moveTo(a,b)});cx.closePath()}cx.fill('evenodd')}
+  const d=cx.getImageData(0,0,W,H).data;const m=new Uint8Array(W*H);for(let i=0,j=3;i<m.length;i++,j+=4)m[i]=d[j]>127?1:0;
+  MASK={W,H,m};return m;
+}
+function escala(){
+  if($('#esc').value==='fixa'||!RAST){LO=-0.2;HI=0.95;$('#escnota').textContent='Escala fixa: as cores valem o mesmo NDVI em todas as datas.';return}
+  const m=mascara(RAST.W,RAST.H);const h=new Uint32Array(256);let n=0;
+  for(let i=0;i<RAST.q.length;i++){const q=RAST.q[i];if(q&&m[i]){h[q]++;n++}}
+  if(n<500){for(let i=0;i<RAST.q.length;i++){const q=RAST.q[i];if(q){h[q]++;n++}}}
+  const pc=t=>{let a=0;for(let q=1;q<256;q++){a+=h[q];if(a>=t*n)return q}return 255};
+  let lo=q2v(pc(0.02)),hi=q2v(pc(0.98));if(hi-lo<0.08){const c=(hi+lo)/2;lo=c-0.04;hi=c+0.04}
+  LO=lo;HI=hi;$('#escnota').textContent='Máximo contraste: as cores vão do 2% mais baixo ao 2% mais alto dos pastos nesta imagem — compare datas pelos números, não pelas cores.';
+}
+function pintar(){
+  const {q,W,H}=RAST;const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');
+  const out=cx.createImageData(W,H);const o=out.data;const k=255/(HI-LO);
+  const map8=new Uint8Array(256);for(let v=1;v<256;v++)map8[v]=Math.max(0,Math.min(255,Math.round((q2v(v)-LO)*k)));
+  for(let i=0,j=0;i<q.length;i++,j+=4){const v=q[i];if(!v){o[j+3]=0;continue}const c=map8[v]*3;o[j]=LUT[c];o[j+1]=LUT[c+1];o[j+2]=LUT[c+2];o[j+3]=255}
+  cx.putImageData(out,0,0);RAST.canvas=cv;
+  const [w,s,e,n]=D.bbox;
+  if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:$('#opac').checked?0.92:0,interactive:false}).addTo(map);
+  const t=[0,0.25,0.5,0.75,1].map(f=>fmt(LO+(HI-LO)*f));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
+}
+async function setDate(i){
   if(i<0||i>=passImgs.length){$('#sub').textContent='Ainda sem imagem limpa processada.';return}
-  $('#data').value=i;const p=passImgs[i];const [w,s,e,n]=D.bbox;
-  if(img)img.remove();img=L.imageOverlay(p.img,[[s,w],[n,e]],{pane:'ndvi',opacity:$('#opac').checked?0.92:0,interactive:false}).addTo(map);layer.bringToFront();
+  $('#data').value=i;const p=passImgs[i];
   $('#sub').textContent=`Sentinel-2 de ${fdate(p.data)} · ${Math.round(p.limpo*100)}% da área sem nuvem · ${passImgs.length} imagens no histórico`;
+  try{RAST=await lerRaster(p)}catch(e){RAST=null}
+  if(cur()!==p)return;
+  escala();if(RAST)pintar();
   refresh();
 }
 function refresh(){
@@ -153,13 +265,17 @@ function refresh(){
   $('#tinfo').textContent=`${ok.length} de ${rows.length} medidos nesta data`;
   layer.setStyle(styleF);
   labels.clearLayers();
-  if(map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(r.nome))}
+  const obOn=OBJ&&$('#obr').checked;
+  if(!obOn&&map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(r.nome))}
   drawChart();drawObras();
 }
+
+/* ---------------- áreas de trabalho ---------------- */
 const OBCOL=['#d81b60','#f57c00','#8e24aa','#00897b','#3949ab','#6d4c41'];
 function OBC(a){const i=(D.obras?.areas||[]).indexOf(a);return OBCOL[(i<0?5:i)%OBCOL.length]}
 function obAt(k,d){const s=D.obras.serie[k];if(!s)return null;let b=null;for(const r of s){if(r[0]<=d)b=r;else break}return b}
 const pct=v=>v==null?'–':v.toLocaleString('pt-BR',{maximumFractionDigits:v<10?1:0})+'%';
+function obTip(p){const r=obAt(p.id,cur()?.data||'9');return `<b>${p.area} · ${p.nome}</b><br>${fmt(p.ha,1)} ha<br>trabalhado ${pct(r?r[1]:null)}${r?` (${fmt(p.ha*r[1]/100,0)} ha)`:''}<br>solo agora ${pct(r?r[2]:null)} · verde de novo ${pct(r?r[3]:null)}`}
 function drawObras(){
   if(!OBJ||!D.obras)return;const d=cur()?.data;if(!d)return;const O=D.obras;
   const haA={};for(const u of O.unidades)haA[u.area]=(haA[u.area]||0)+u.ha;const haT=Object.values(haA).reduce((a,b)=>a+b,0);
@@ -170,12 +286,10 @@ function drawObras(){
   h+=row('_total','<b>Total</b>',haT,'','','');
   $('#obtb').innerHTML=h;
   const rt=obAt('_total',d);$('#obinfo').textContent=rt?`${fmt(haT*rt[1]/100,0)} de ${fmt(haT,0)} ha trabalhados até ${fdate(rt[0])}`:'';
-  $('#obnota').textContent=`Trabalhado = já apareceu como solo exposto (NDVI < ${String(O.limiares?.solo??0.35).replace('.',',')}) desde ${fdate(O.inicio)}, sem contar o que já era solo antes (estradas, currais, aguadas). Só entram imagens com ≥ 90% da fazenda sem nuvem. Clique numa área para ver as subáreas.`;
-  // rótulos no mapa
-  if(obLayer&&$('#obr').checked&&map.getZoom()>=13)for(const f of OBJ.features){const r=obAt(f.properties.id,d);const c=L.geoJSON(f).getBounds().getCenter();
+  $('#obnota').textContent=`Trabalhado = já apareceu como solo exposto (NDVI < ${String(O.limiares?.solo??0.35).replace('.',',')}) desde ${fdate(O.inicio)}, sem contar o que já era solo antes (estradas, currais, aguadas). Só entram imagens com ≥ 90% da fazenda sem nuvem. Clique numa área para ver as subáreas; marque "Áreas de trabalho" no topo para vê-las no mapa.`;
+  if($('#obr').checked&&map.getZoom()>=13)for(const f of OBJ.features){const r=obAt(f.properties.id,d);const c=L.geoJSON(f).getBounds().getCenter();
     labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`<span style="color:${OBC(f.properties.area)};background:#fff;padding:0 3px;border-radius:3px;text-shadow:none">${f.properties.nome} · ${pct(r?r[1]:0)}</span>`))}
-  // gráfico do avanço acumulado
-  const keys=[...O.areas,'_total'];const t0s=O.inicio;const all=keys.flatMap(k=>(O.serie[k]||[]).map(r=>r[0]));if(!all.length){$('#obchart').innerHTML='';return}
+  const keys=[...O.areas,'_total'];const all=keys.flatMap(k=>(O.serie[k]||[]).map(r=>r[0]));if(!all.length){$('#obchart').innerHTML='';return}
   const t=x=>new Date(x+'T12:00:00Z').getTime();const ta=Math.min(...all.map(t)),tb=Math.max(...all.map(t));
   const hi=Math.max(10,Math.ceil(Math.max(...keys.flatMap(k=>(O.serie[k]||[]).map(r=>r[1])))/10)*10);
   const W=400,H=150,L0=30,R0=8,T0=8,B0=18;const X=x=>L0+(W-L0-R0)*(tb>ta?(t(x)-ta)/(tb-ta):0.5),Y=v=>T0+(H-T0-B0)*(1-v/hi);
@@ -191,7 +305,6 @@ function drawObras(){
 function pick(id){sel=sel===id?null:id;refresh();const tr=document.querySelector(`tr[data-id="${CSS.escape(id)}"]`);if(tr)tr.scrollIntoView({block:'nearest'})}
 function farmMean(){const by={};for(const f of GJ.features){if($('#ret').value&&f.properties.retiro!==$('#ret').value)continue;for(const r of (D.serie[f.properties.id]||[])){(by[r[0]]??=[0,0]);by[r[0]][0]+=r[1]*f.properties.area_ha;by[r[0]][1]+=f.properties.area_ha}}
   const tot=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).reduce((a,f)=>a+f.properties.area_ha,0);
-  // só datas em que pelo menos 70% da área foi medida: datas parciais distorcem a média (mede só os pastos sem nuvem)
   return Object.entries(by).filter(([,v])=>v[1]>=0.7*tot).sort().map(([d,v])=>[d,v[0]/v[1]])}
 function drawChart(){
   const fm=farmMean();const s=sel?D.serie[sel]||[]:[];
@@ -211,17 +324,86 @@ function drawChart(){
   const c=cur();if(c)g+=`<line x1="${X(c.data)}" x2="${X(c.data)}" y1="${T0}" y2="${H-B0}" stroke="var(--ink)" stroke-opacity=".35"/>`;
   $('#chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`;
 }
+
+/* ---------------- exportar ---------------- */
+function baixar(nome,blob){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nome;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+const slug=()=>`${FKEY}_${cur()?.data||''}`;
+// GeoTIFF Float32, sem compressão, EPSG:4326, nodata -9999
+function geotiff(vals,W,H,bbox){
+  const [w,s,e,n]=bbox;const sx=(e-w)/W,sy=(n-s)/H;
+  const tags=[];const extra=[];let ex=0;
+  const T=(tag,type,count,val)=>tags.push({tag,type,count,val});
+  const nodata='-9999\0';
+  const geokeys=[1,1,0,3, 1024,0,1,2, 1025,0,1,1, 2048,0,1,4326];
+  T(256,4,1,W);T(257,4,1,H);T(258,3,1,32);T(259,3,1,1);T(262,3,1,1);T(273,4,1,0);T(277,3,1,1);T(278,4,1,H);T(279,4,1,W*H*4);T(284,3,1,1);T(339,3,1,3);
+  T(33550,12,3,[sx,sy,0]);T(33922,12,6,[0,0,0,w,n,0]);T(34735,3,geokeys.length,geokeys);T(42113,2,nodata.length,nodata);
+  tags.sort((a,b)=>a.tag-b.tag);
+  const sz={2:1,3:2,4:4,12:8};const ifdSize=2+tags.length*12+4;let off=8+ifdSize;
+  for(const t of tags){const bytes=sz[t.type]*t.count;if(bytes>4){t.off=off;off+=bytes+(bytes%2)}}
+  const dataOff=off;const total=dataOff+W*H*4;const buf=new ArrayBuffer(total);const dv=new DataView(buf);
+  dv.setUint8(0,0x49);dv.setUint8(1,0x49);dv.setUint16(2,42,true);dv.setUint32(4,8,true);
+  let p=8;dv.setUint16(p,tags.length,true);p+=2;
+  const put=(o,type,v)=>{if(type===3)dv.setUint16(o,v,true);else if(type===4)dv.setUint32(o,v,true);else if(type===12)dv.setFloat64(o,v,true);else if(type===2)dv.setUint8(o,v.charCodeAt(0))};
+  for(const t of tags){if(t.tag===273)t.val=dataOff;
+    dv.setUint16(p,t.tag,true);dv.setUint16(p+2,t.type,true);dv.setUint32(p+4,t.count,true);
+    const arr=t.type===2?[...t.val]:(Array.isArray(t.val)?t.val:[t.val]);
+    if(t.off){dv.setUint32(p+8,t.off,true);arr.forEach((v,i)=>put(t.off+i*sz[t.type],t.type,v))}
+    else arr.forEach((v,i)=>put(p+8+i*sz[t.type],t.type,v));
+    p+=12}
+  dv.setUint32(p,0,true);
+  new Float32Array(buf,dataOff,W*H).set(vals);
+  return new Blob([buf],{type:'image/tiff'});
+}
+// .zip sem compressão (para KMZ e PNG+PGW)
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function zip(files){const enc=new TextEncoder();const parts=[],cen=[];let off=0;
+  for(const f of files){const nm=enc.encode(f.name);const d=f.data instanceof Uint8Array?f.data:enc.encode(f.data);const c=crc32(d);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(8,0,true);h.setUint32(14,c,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,nm.length,true);
+    parts.push(new Uint8Array(h.buffer),nm,d);
+    const k=new DataView(new ArrayBuffer(46));k.setUint32(0,0x02014b50,true);k.setUint16(4,20,true);k.setUint16(6,20,true);k.setUint32(16,c,true);k.setUint32(20,d.length,true);k.setUint32(24,d.length,true);k.setUint16(28,nm.length,true);k.setUint32(42,off,true);
+    cen.push(new Uint8Array(k.buffer),nm);off+=30+nm.length+d.length}
+  const cs=cen.reduce((a,b)=>a+b.length,0);const e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(e.buffer)],{type:'application/zip'})}
+async function pngBytes(){const b=await new Promise(ok=>RAST.canvas.toBlob(ok,'image/png'));return new Uint8Array(await b.arrayBuffer())}
+const csvN=v=>v==null||isNaN(v)?'':String(Math.round(v*1000)/1000).replace('.',',');
+function csv(nome,linhas){baixar(nome,new Blob(['﻿'+linhas.map(r=>r.map(x=>{x=x==null?'':String(x);return /[;"\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x}).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}))}
+async function exportar(tipo){
+  const p=cur();$('#exp').open=false;
+  if((tipo==='tif'||tipo==='kmz'||tipo==='png')&&!RAST){alert('Sem imagem carregada.');return}
+  const [w,s,e,n]=D.bbox;
+  if(tipo==='tif'){const {q,W,H}=RAST;const v=new Float32Array(W*H);for(let i=0;i<v.length;i++)v[i]=q[i]?Math.round(q2v(q[i])*10000)/10000:-9999;
+    baixar(`ndvi_${slug()}.tif`,geotiff(v,W,H,D.bbox))}
+  if(tipo==='kmz'){const kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Folder><name>NDVI ${D.fazenda} ${fdate(p.data)}</name><GroundOverlay><name>NDVI ${fdate(p.data)} (${fmt(LO)} a ${fmt(HI)})</name><color>e6ffffff</color><Icon><href>ndvi.png</href></Icon><LatLonBox><north>${n}</north><south>${s}</south><east>${e}</east><west>${w}</west></LatLonBox></GroundOverlay></Folder></kml>`;
+    baixar(`ndvi_${slug()}.kmz`,zip([{name:'doc.kml',data:kml},{name:'ndvi.png',data:await pngBytes()}]))}
+  if(tipo==='png'){const {W,H}=RAST;const pgw=[(e-w)/W,0,0,-(n-s)/H,w+(e-w)/W/2,n-(n-s)/H/2].map(String).join('\n');
+    const prj='GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]]';
+    baixar(`ndvi_${slug()}_png.zip`,zip([{name:`ndvi_${slug()}.png`,data:await pngBytes()},{name:`ndvi_${slug()}.pgw`,data:pgw},{name:`ndvi_${slug()}.prj`,data:prj},{name:'LEIA-ME.txt',data:`NDVI ${D.fazenda} ${fdate(p.data)}\nCores: escala de ${fmt(LO,3)} (marrom) a ${fmt(HI,3)} (verde escuro).\nPara valores numéricos use a exportação GeoTIFF.\n`}]))}
+  if(tipo==='csv'){const rows=GJ.features.map(rowFor);csv(`ndvi_pastos_${slug()}.csv`,[['fazenda','retiro','pasto','area_ha','data_imagem','ndvi_medio','ndvi_p10','ndvi_p90','variacao_vs_anterior','medido_em'],
+    ...rows.map(r=>[D.fazenda,r.retiro,r.nome,csvN(r.ha),p.data,csvN(r.v),csvN(r.p10),csvN(r.p90),csvN(r.d),r.dt||''])])}
+  if(tipo==='serie'){const L=[['fazenda','retiro','pasto','area_ha','data','ndvi_medio','ndvi_p10','ndvi_p90','fracao_sem_nuvem']];
+    for(const f of GJ.features)for(const r of (D.serie[f.properties.id]||[]))L.push([D.fazenda,f.properties.retiro,f.properties.nome,csvN(f.properties.area_ha),r[0],csvN(r[1]),csvN(r[2]),csvN(r[3]),csvN(r[4])]);
+    csv(`ndvi_serie_${FKEY}.csv`,L)}
+  if(tipo==='obras'&&D.obras){const O=D.obras;const ha={};for(const u of O.unidades){ha[u.id]=u.ha;ha[u.area]=(ha[u.area]||0)+u.ha;ha._total=(ha._total||0)+u.ha}
+    const L=[['unidade','area_ha','data','trabalhado_pct','trabalhado_ha','solo_exposto_agora_pct','verde_de_novo_pct','fracao_sem_nuvem']];
+    for(const [k,s] of Object.entries(O.serie))for(const r of s)L.push([k==='_total'?'Total':k,csvN(ha[k]),r[0],csvN(r[1]),csvN(ha[k]*r[1]/100),csvN(r[2]),csvN(r[3]),csvN(r[4])]);
+    csv(`avanco_areas_trabalho_${FKEY}.csv`,L)}
+}
+document.querySelectorAll('#exp .menu button').forEach(b=>b.onclick=()=>exportar(b.dataset.x));
+document.addEventListener('click',e=>{if(!e.target.closest('#exp'))$('#exp').open=false});
+
 $('#data').onchange=()=>setDate(+$('#data').value);
 $('#prev').onclick=()=>setDate(Math.max(0,+$('#data').value-1));
 $('#next').onclick=()=>setDate(Math.min(passImgs.length-1,+$('#data').value+1));
 $('#ret').onchange=refresh;$('#faz').onchange=()=>loadFarm($('#faz').value);
-$('#obr').onchange=()=>{if(obLayer){if($('#obr').checked)obLayer.addTo(map);else obLayer.remove()}refresh()};
+$('#esc').onchange=()=>{st.set('ndvi_esc',$('#esc').value);escala();if(RAST)pintar();refresh()};
+$('#obr').onchange=()=>{camadas();refresh()};
 $('#obtb').onclick=e=>{const tr=e.target.closest('tr');if(!tr||!D.obras.areas.includes(tr.dataset.a))return;obOpen[tr.dataset.a]=!obOpen[tr.dataset.a];drawObras()};
 $('#opac').onchange=()=>{if(img)img.setOpacity($('#opac').checked?0.92:0);refresh()};
 $('#tb').onclick=e=>{const tr=e.target.closest('tr');if(tr)pick(tr.dataset.id)};
-document.querySelectorAll('th').forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortA=sortK===k?!sortA:(k==='nome'||k==='retiro');sortK=k;refresh()});
+document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortA=sortK===k?!sortA:(k==='nome'||k==='retiro');sortK=k;refresh()});
 map.on('zoomend',refresh);
-init();
+gate();
 </script>
 </body>
 </html>

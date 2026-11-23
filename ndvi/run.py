@@ -110,6 +110,16 @@ def fetch_ndvi(bbox, W, H, day):
 # ---------------------------------------------------------------- cores (paleta NDVI)
 STOPS = [(-0.2, (120, 80, 50)), (0.0, (165, 120, 75)), (0.2, (215, 180, 110)), (0.35, (235, 225, 140)),
          (0.5, (170, 205, 110)), (0.65, (95, 170, 75)), (0.8, (35, 120, 50)), (0.95, (10, 70, 30))]
+def to_gray(nd):
+    """NDVI -> PNG 8 bits: 0 = sem dado; 1..255 = NDVI de -0,2 a 0,95 (passo ~0,0045).
+    A página colore no navegador (contraste ajustável) e exporta GeoTIFF a partir disso."""
+    q = np.round((np.clip(nd, -0.2, 0.95) + 0.2) / 1.15 * 254) + 1
+    return np.where(nd > -1.5, q, 0).astype('uint8')
+
+def write_map(path, nd):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(to_gray(nd), 'L').save(path, optimize=True)
+
 def colorize(nd, valid):
     v = np.clip(nd, STOPS[0][0], STOPS[-1][0]); out = np.zeros(nd.shape + (4,), 'uint8')
     xs = [s[0] for s in STOPS]
@@ -173,12 +183,17 @@ def run_farm(key, f):
                                                    round(float(np.percentile(vv, 90)), 3), round(float(fr), 2)])
         if ob: ob.update(day, nd, limpo, D)
         if limpo >= f.get('min_limpo_mapa', 0.6):
-            img = DOCS / 'img' / key / f'ndvi_{day}.png'; img.parent.mkdir(parents=True, exist_ok=True)
-            Image.fromarray(colorize(nd, nd > -1.5)).convert('RGBA').quantize(colors=96, method=Image.Quantize.FASTOCTREE).save(img, optimize=True)
-            reg['img'] = f'img/{key}/ndvi_{day}.png'
+            write_map(DOCS / 'img' / key / f'ndvi_{day}.png', nd)
+            reg['img'] = f'img/{key}/ndvi_{day}.png'; reg['fmt'] = 'g8'
         D['passagens'].append(reg); novas += 1
         print(f'  {day}: cobertura {cob:.0%}, limpo {limpo:.0%}' + (' → mapa salvo' if reg['img'] else ''))
         if novas % 10 == 0: save(D, datafile)
+    # o mapa mais recente vindo da conversão dos PNGs coloridos antigos é rebaixado uma vez em precisão total
+    ult = [p for p in D['passagens'] if p.get('img')]
+    if ult and ult[-1].get('fmt') != 'g8':
+        p = ult[-1]; nd, _ = fetch_ndvi(bbox, W, H, p['data'])
+        if nd.shape == (H, W):
+            write_map(DOCS / p['img'], nd); p['fmt'] = 'g8'; print(f'  {p["data"]}: mapa refeito em precisão total')
     if ob:
         ob.save()
         gj = DOCS / 'data' / f'{key}_obras.geojson'

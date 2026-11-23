@@ -46,6 +46,26 @@ pelo menos 90% da fazenda sem nuvem, `ndvi/obras.py` marca como **trabalhado** o
 com **solo exposto agora** e a parte já trabalhada que ficou **verde de novo** (NDVI ≥ 0,55). O estado pixel a pixel fica em
 `docs/img/_estado/` (ramo `imagens`). `ndvi/backfill_obras.py` reconstrói tudo a partir dos mapas já guardados.
 
+## Senha da página
+
+A página pede uma senha de 6 dígitos antes de mostrar os mapas. A senha padrão é **123321**. Para trocar, crie (ou edite)
+o segredo `SENHA_SITE` em **Settings → Secrets and variables → Actions** com os 6 dígitos novos e rode o workflow:
+a página passa a aceitar só a senha nova. Quem marcou "lembrar neste aparelho" precisa digitar a nova senha.
+
+Atenção: é uma senha de entrada, não uma proteção dos dados. O repositório é público, e quem souber o endereço dos
+arquivos (`docs/data/...`, ramo `imagens`) consegue baixá-los sem passar pela senha.
+
+## Exportar
+
+O botão **Exportar** da página gera, para a imagem selecionada: GeoTIFF com o valor do NDVI em cada pixel (EPSG:4326,
+nodata −9999), KMZ para o Google Earth, PNG colorido com .pgw/.prj, tabela CSV dos pastos e a série histórica completa
+em CSV (separador `;`, decimal com vírgula). Em La Esperanza, também o avanço das áreas de trabalho em CSV.
+
+Os mapas ficam guardados como PNG de 8 bits com o próprio NDVI (0 = sem dado; 1–255 = −0,2 a 0,95, passo ≈ 0,0045),
+e a página colore no navegador. Por padrão a escala é de **máximo contraste** (do percentil 2 ao 98 dos pastos na
+imagem); a opção "Fixa" mantém as mesmas cores para o mesmo NDVI em todas as datas. Os mapas anteriores a 23/11/2026
+foram convertidos dos PNGs coloridos antigos e têm precisão menor (≈ 0,03).
+
 ## Credenciais (segredos do repositório)
 
 Em **Settings → Secrets and variables → Actions → New repository secret**:

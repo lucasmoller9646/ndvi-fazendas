@@ -3,3 +3,4 @@ __pycache__/
 .env
 docs/img/*
 !docs/img/.gitkeep
+docs/acesso.json
