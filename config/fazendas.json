@@ -4,7 +4,7 @@
     "pastos": "config/ypoti_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30,
+    "mapas_guardados": 45,
     "limite": "config/ypoti_limite.geojson"
   },
   "lusipar": {
@@ -12,35 +12,35 @@
     "pastos": "config/lusipar_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "santa-clara": {
     "nome": "Santa Clara",
     "pastos": "config/santa-clara_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "ybypora": {
     "nome": "Ybypora",
     "pastos": "config/ybypora_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "oro-verde": {
     "nome": "Oro Verde",
     "pastos": "config/oro-verde_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "yby-pyta": {
     "nome": "Yby Pytá (Cafetalera)",
     "pastos": "config/yby-pyta_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "la-esperanza": {
     "nome": "La Esperanza",
@@ -48,7 +48,7 @@
     "limite": "config/la-esperanza_limite.geojson",
     "inicio": "2025-11-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 40,
+    "mapas_guardados": 60,
     "obras": {
       "geojson": "config/la-esperanza_obras.geojson",
       "inicio": "2026-10-01",
@@ -62,34 +62,34 @@
     "pastos": "config/ita-vera_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "cerro-memby": {
     "nome": "Cerro Memby",
     "pastos": "config/cerro-memby_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "luna-blanca": {
     "nome": "Luna Blanca",
     "pastos": "config/luna-blanca_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "cielo-azul": {
     "nome": "Cielo Azul",
     "pastos": "config/cielo-azul_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   },
   "santa-maria": {
     "nome": "Santa María",
     "pastos": "config/santa-maria_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 30
+    "mapas_guardados": 45
   }
 }

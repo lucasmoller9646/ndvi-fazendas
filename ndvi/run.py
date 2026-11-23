@@ -19,6 +19,7 @@ from rasterio.features import rasterize
 from rasterio.transform import from_bounds
 from shapely.geometry import shape
 from obras import Obras
+import landsat
 
 ROOT = Path(__file__).resolve().parents[1]
 CFG = json.loads((ROOT / 'config' / 'fazendas.json').read_text(encoding='utf-8'))
@@ -148,24 +149,42 @@ def run_farm(key, f):
     D = json.loads(datafile.read_text(encoding='utf-8')) if datafile.exists() else {
         'fazenda': f['nome'], 'bbox': bbox, 'pastos_geojson': f'data/{key}_pastos.geojson', 'passagens': [], 'serie': {}}
     D['bbox'] = bbox
-    feito = {p['data'] for p in D['passagens']}
+    src_of = lambda p: 'L' if p.get('sat', 'S2').startswith('L') else 'S2'
+    feitoS = {p['data'] for p in D['passagens'] if src_of(p) == 'S2'}
+    feitoL = {p['data'] for p in D['passagens'] if src_of(p) == 'L'}
     hoje = dt.date.today()
-    d0 = dt.date.fromisoformat(f.get('inicio', '2025-11-01'))
-    if D['passagens']:
-        d0 = max(d0, hoje - dt.timedelta(days=int(os.environ.get('JANELA_DIAS', '20'))))
-    datas = [d for d in catalog_dates(bbox, d0, hoje) if d not in feito]
-    print(f'{key}: {len(datas)} passagem(ns) nova(s) entre {d0} e {hoje}')
+    ini = dt.date.fromisoformat(f.get('inicio', '2025-11-01'))
+    d0 = max(ini, hoje - dt.timedelta(days=int(os.environ.get('JANELA_DIAS', '20')))) if feitoS else ini
+    cands = [(d, 'S2') for d in catalog_dates(bbox, d0, hoje) if d not in feitoS]
+    LI = {}
+    if f.get('landsat', True) and os.environ.get('SEM_LANDSAT') != '1':
+        d0L = max(ini, hoje - dt.timedelta(days=int(os.environ.get('JANELA_LANDSAT', '45')))) if feitoL else ini
+        try:
+            LI = landsat.catalog(bbox, d0L, hoje)
+        except Exception as e:
+            print('  catálogo Landsat indisponível nesta execução:', e)
+        dias_s2 = feitoS | {d for d, _ in cands}
+        cands += [(d, 'L') for d in LI if d not in feitoL and d not in dias_s2]   # mesmo dia: fica o Sentinel-2
+    cands.sort()
+    print(f"{key}: {sum(1 for c in cands if c[1]=='S2')} passagem(ns) nova(s) do Sentinel-2 e "
+          f"{sum(1 for c in cands if c[1]=='L')} do Landsat 8/9 desde {d0}")
     novas = 0
-    for day in datas:
-        nd, dm = fetch_ndvi(bbox, W, H, day)
+    for day, fonte in cands:
+        if fonte == 'S2':
+            nd, dm = fetch_ndvi(bbox, W, H, day); sat = 'S2'
+        else:
+            try:
+                nd, dm, sat = landsat.fetch(LI[day], T, W, H)
+            except Exception as e:
+                print(f'  {day} Landsat: erro na leitura ({e}); fica para a próxima execução'); continue
         if nd.shape != (H, W):
             print('  tamanho inesperado', nd.shape); continue
         has = (dm > 0) & inside; valid = (nd > -1.5) & inside
         cob = has.sum() / inside.sum()
         limpo = valid.sum() / max(has.sum(), 1)
-        reg = {'data': day, 'cobertura': round(float(cob), 3), 'limpo': round(float(limpo), 3), 'img': None}
+        reg = {'data': day, 'sat': sat, 'cobertura': round(float(cob), 3), 'limpo': round(float(limpo), 3), 'img': None}
         if cob < 0.5:
-            print(f'  {day}: fora da faixa do satélite ({cob:.0%})'); D['passagens'].append(reg); continue
+            print(f'  {day} {sat}: fora da faixa do satélite ({cob:.0%})'); D['passagens'].append(reg); continue
         # estatística por pasto
         flat_id = ids[valid]; flat_v = nd[valid]
         nval = np.bincount(flat_id, minlength=len(feats) + 1)
@@ -180,28 +199,31 @@ def run_farm(key, f):
             vv = flat_v[flat_id == i]
             D['serie'].setdefault(pid, []).append([day, round(float(soma[i] / nval[i]), 3),
                                                    round(float(np.percentile(vv, 10)), 3),
-                                                   round(float(np.percentile(vv, 90)), 3), round(float(fr), 2)])
+                                                   round(float(np.percentile(vv, 90)), 3), round(float(fr), 2)]
+                                                  + ([sat] if sat != 'S2' else []))
         if ob: ob.update(day, nd, limpo, D)
         if limpo >= f.get('min_limpo_mapa', 0.6):
-            write_map(DOCS / 'img' / key / f'ndvi_{day}.png', nd)
-            reg['img'] = f'img/{key}/ndvi_{day}.png'; reg['fmt'] = 'g8'
+            nome = f'ndvi_{day}.png' if sat == 'S2' else f'ndvi_{day}_{sat}.png'
+            write_map(DOCS / 'img' / key / nome, nd)
+            reg['img'] = f'img/{key}/{nome}'; reg['fmt'] = 'g8'
         D['passagens'].append(reg); novas += 1
-        print(f'  {day}: cobertura {cob:.0%}, limpo {limpo:.0%}' + (' → mapa salvo' if reg['img'] else ''))
+        print(f'  {day} {sat}: cobertura {cob:.0%}, limpo {limpo:.0%}' + (' → mapa salvo' if reg['img'] else ''))
         if novas % 10 == 0: save(D, datafile)
     # o mapa mais recente vindo da conversão dos PNGs coloridos antigos é rebaixado uma vez em precisão total
     ult = [p for p in D['passagens'] if p.get('img')]
-    if ult and ult[-1].get('fmt') != 'g8':
+    if ult and ult[-1].get('fmt') != 'g8' and ult[-1].get('sat', 'S2') == 'S2':
         p = ult[-1]; nd, _ = fetch_ndvi(bbox, W, H, p['data'])
         if nd.shape == (H, W):
             write_map(DOCS / p['img'], nd); p['fmt'] = 'g8'; print(f'  {p["data"]}: mapa refeito em precisão total')
     if ob:
+        ob.recalcula(D)
         ob.save()
         gj = DOCS / 'data' / f'{key}_obras.geojson'
         gj.write_text(json.dumps(ob.gj, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
         D['obras_geojson'] = f'data/{key}_obras.geojson'
-    D['passagens'].sort(key=lambda p: p['data'])
+    D['passagens'].sort(key=lambda p: (p['data'], p.get('sat', 'S2')))
     for k in D['serie']:
-        D['serie'][k] = sorted({r[0]: r for r in D['serie'][k]}.values())
+        D['serie'][k] = sorted({r[0]: r for r in D['serie'][k]}.values(), key=lambda r: r[0])
     # mantém no repositório só os últimos N mapas (a série por pasto fica completa)
     keep = f.get('mapas_guardados', 40)
     com_img = [p for p in D['passagens'] if p['img']]

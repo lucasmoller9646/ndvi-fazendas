@@ -44,12 +44,12 @@ class Obras:
         if limpo >= self.min_limpo:
             if o < self.inicio:
                 if o >= self.inicio - 180: self.base |= bare
-            else:
-                new = bare & (self.first == 0) & ~self.base
+            else:   # guarda a data MAIS ANTIGA em que o pixel apareceu exposto (vale em qualquer ordem de processamento)
+                new = bare & ((self.first == 0) | (self.first > o))
                 self.first[new] = o
         if o < self.inicio - 60 or limpo < 0.6:
             return
-        trab = (self.first > 0) & (self.first <= o)
+        trab = (self.first > 0) & (self.first <= o) & ~self.base
         green = trab & valid & (nd >= self.lv)
         S = D.setdefault('obras', {'inicio': self.cfg['inicio'], 'unidades': self.units, 'areas': self.areas, 'serie': {}})
         S['unidades'] = self.units; S['areas'] = self.areas; S['inicio'] = self.cfg['inicio']
@@ -68,6 +68,27 @@ class Obras:
         for gi, a in enumerate(self.areas, start=1):
             put(a, self.grupo[self.ids] == gi)
         put('_total', self.ids > 0)
+
+    def recalcula(self, D):
+        """refaz a coluna 'trabalhado' de todas as datas com o estado final (uma imagem processada depois
+        pode ter revelado solo exposto numa data anterior)"""
+        S = D.get('obras')
+        if not S: return
+        ok = (self.first > 0) & ~self.base
+        dias = sorted({r[0] for ser in S['serie'].values() for r in ser})
+        grp = self.grupo[self.ids]
+        tot_u = np.bincount(self.ids.ravel(), minlength=self.n + 1)
+        tot_g = np.bincount(grp.ravel(), minlength=len(self.areas) + 1)
+        tot_t = (self.ids > 0).sum()
+        for d in dias:
+            t = ok & (self.first <= _ord(d)) & (self.ids > 0)
+            cu = np.bincount(self.ids[t], minlength=self.n + 1); cg = np.bincount(grp[t], minlength=len(self.areas) + 1)
+            val = {u['id']: 100 * cu[i] / tot_u[i] for i, u in enumerate(self.units, start=1) if tot_u[i]}
+            val.update({a: 100 * cg[i] / tot_g[i] for i, a in enumerate(self.areas, start=1) if tot_g[i]})
+            val['_total'] = 100 * t.sum() / tot_t
+            for k, ser in S['serie'].items():
+                for r in ser:
+                    if r[0] == d and k in val: r[1] = round(float(val[k]), 1)
 
     def save(self):
         np.savez_compressed(self.f, first=self.first, base=self.base)

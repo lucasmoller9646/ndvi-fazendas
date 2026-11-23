@@ -117,18 +117,19 @@ body.locked header,body.locked main{visibility:hidden}
     <div class="card chart">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b id="ctit">Série histórica</b><span class="muted" id="cinfo"></span></div>
       <div id="chart"></div>
-      <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
+      <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · ● Sentinel-2 · ○ Landsat · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:baseline"><b>Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
       <div class="tw"><table><thead><tr><th data-k="nome">Pasto</th><th data-k="retiro">Retiro</th><th data-k="ha">ha</th><th data-k="v">NDVI</th><th data-k="d">Δ</th><th data-k="dt">medido em</th></tr></thead><tbody id="tb"></tbody></table></div>
     </div>
-    <div class="muted">Fonte: Copernicus Sentinel-2 L2A (10 m), processado via Copernicus Data Space Ecosystem. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
+    <div class="muted">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
   </div>
 </main>
 <script>
 const $=s=>document.querySelector(s);
 const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const SATN={S2:'Sentinel-2',L8:'Landsat 8',L9:'Landsat 9'};const satn=p=>SATN[p?.sat||'S2']||p?.sat;
 const fdate=s=>{const [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
 const st={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
@@ -189,7 +190,7 @@ async function loadFarm(k){
   const rs=[...new Set(GJ.features.map(f=>f.properties.retiro))].sort();
   $('#ret').innerHTML='<option value="">Todos</option>'+rs.map(r=>`<option>${r}</option>`).join('');
   passImgs=D.passagens.filter(p=>p.img);
-  $('#data').innerHTML=passImgs.map((p,i)=>`<option value="${i}">${fdate(p.data)} · ${Math.round(p.limpo*100)}% limpo</option>`).reverse().join('');
+  $('#data').innerHTML=passImgs.map((p,i)=>`<option value="${i}">${fdate(p.data)} · ${satn(p)} · ${Math.round(p.limpo*100)}% limpo</option>`).reverse().join('');
   const [w,s,e,n]=D.bbox;map.fitBounds([[s,w],[n,e]],{padding:[10,10]});
   if(layer)layer.remove();
   layer=L.geoJSON(GJ,{style:styleF,onEachFeature:(f,l)=>{l.on('click',()=>pick(f.properties.id));l.bindTooltip(()=>tip(f.properties),{sticky:true})}});
@@ -210,7 +211,7 @@ function camadas(){const ob=OBJ&&$('#obr').checked;
 function seriesAt(id,dateStr){const s=D.serie[id];if(!s)return null;let best=null;for(const r of s){if(r[0]<=dateStr)best=r;else break}return best}
 function prevOf(id,dateStr){const s=D.serie[id];if(!s)return null;let p=null;for(const r of s){if(r[0]<dateStr)p=r;else break}return p}
 function cur(){return passImgs[+$('#data').value]}
-function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,p10:r?r[2]:null,p90:r?r[3]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
+function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,sat:r?r[5]:null,p10:r?r[2]:null,p90:r?r[3]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
 function styleF(f){const r=rowFor(f);const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
   return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:$('#opac').checked?0:(hide?0:0.85),fillColor:col(r.v)}}
 function tip(p){const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
@@ -255,7 +256,8 @@ function pintar(){
 async function setDate(i){
   if(i<0||i>=passImgs.length){$('#sub').textContent='Ainda sem imagem limpa processada.';return}
   $('#data').value=i;const p=passImgs[i];
-  $('#sub').textContent=`Sentinel-2 de ${fdate(p.data)} · ${Math.round(p.limpo*100)}% da área sem nuvem · ${passImgs.length} imagens no histórico`;
+  const nL=passImgs.filter(x=>(x.sat||'S2')!=='S2').length;
+  $('#sub').textContent=`${satn(p)} de ${fdate(p.data)}${(p.sat||'S2')!=='S2'?' (30 m)':' (10 m)'} · ${Math.round(p.limpo*100)}% da área sem nuvem · ${passImgs.length} imagens no histórico (${passImgs.length-nL} Sentinel-2, ${nL} Landsat)`;
   try{RAST=await lerRaster(p)}catch(e){RAST=null}
   if(cur()!==p)return;
   escala();if(RAST)pintar();
@@ -270,7 +272,7 @@ function refresh(){
   $('#k1').textContent=fmt(m);$('#k2').textContent=md==null?'–':(md>=0?'+':'')+fmt(md);$('#k2').className=md==null?'':md<0?'neg':'pos';
   $('#k3').textContent=cur()?Math.round(cur().limpo*100)+'%':'–';
   rows.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(x==null)return 1;if(y==null)return -1;if(typeof x==='string')return sortA?x.localeCompare(y,'pt',{numeric:true}):y.localeCompare(x,'pt',{numeric:true});return sortA?x-y:y-x});
-  $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${col(r.v)};margin-right:4px"></span>${fmt(r.v)}</td><td class="${r.d==null?'':r.d<0?'neg':'pos'}">${r.d==null?'–':(r.d>=0?'+':'')+fmt(r.d)}</td><td class="muted">${r.dt?(r.atual?'esta imagem':fdate(r.dt)):'–'}</td></tr>`).join('');
+  $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${col(r.v)};margin-right:4px"></span>${fmt(r.v)}</td><td class="${r.d==null?'':r.d<0?'neg':'pos'}">${r.d==null?'–':(r.d>=0?'+':'')+fmt(r.d)}</td><td class="muted">${r.dt?(r.atual?'esta imagem':fdate(r.dt)+(r.sat?' L':'')):'–'}</td></tr>`).join('');
   $('#tinfo').textContent=`${ok.length} de ${rows.length} medidos nesta data`;
   layer.setStyle(styleF);
   labels.clearLayers();
@@ -329,7 +331,7 @@ function drawChart(){
   const step=Math.ceil(months.length/7);months.forEach((m,i)=>{if(i%step)return;const iso=m.toISOString().slice(0,10);g+=`<text x="${X(iso)}" y="${H-5}" font-size="9" text-anchor="middle" fill="var(--mut)">${m.toLocaleDateString('pt-BR',{month:'short',year:'2-digit',timeZone:'UTC'})}</text>`});
   if(fm.length)g+=`<polyline fill="none" stroke="var(--mut)" stroke-width="1.3" stroke-dasharray="4 3" points="${fm.map(r=>X(r[0])+','+Y(r[1])).join(' ')}"/>`;
   if(s.length){g+=`<polygon fill="var(--acc)" fill-opacity=".16" points="${s.map(r=>X(r[0])+','+Y(r[3])).join(' ')} ${s.slice().reverse().map(r=>X(r[0])+','+Y(r[2])).join(' ')}"/>`;
-    g+=`<polyline fill="none" stroke="var(--acc)" stroke-width="2" points="${s.map(r=>X(r[0])+','+Y(r[1])).join(' ')}"/>`;g+=s.map(r=>`<circle cx="${X(r[0])}" cy="${Y(r[1])}" r="2.2" fill="var(--acc)"><title>${fdate(r[0])}: ${fmt(r[1])}</title></circle>`).join('')}
+    g+=`<polyline fill="none" stroke="var(--acc)" stroke-width="2" points="${s.map(r=>X(r[0])+','+Y(r[1])).join(' ')}"/>`;g+=s.map(r=>r[5]?`<circle cx="${X(r[0])}" cy="${Y(r[1])}" r="2.6" fill="var(--card)" stroke="var(--acc)" stroke-width="1.4"><title>${fdate(r[0])} · ${SATN[r[5]]}: ${fmt(r[1])}</title></circle>`:`<circle cx="${X(r[0])}" cy="${Y(r[1])}" r="2.2" fill="var(--acc)"><title>${fdate(r[0])} · Sentinel-2: ${fmt(r[1])}</title></circle>`).join('')}
   const c=cur();if(c)g+=`<line x1="${X(c.data)}" x2="${X(c.data)}" y1="${T0}" y2="${H-B0}" stroke="var(--ink)" stroke-opacity=".35"/>`;
   $('#chart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`;
 }

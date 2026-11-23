@@ -16,6 +16,17 @@ recentes do **Sentinel-2** (10 m, revisita de ~5 dias), com o NDVI médio de cad
 | Mapa | Se pelo menos 60% da fazenda estiver limpa, salva a imagem colorida. Os mapas ficam no ramo `imagens`, regravado a cada execução sem histórico (para o repositório não crescer sem limite); guardam-se os últimos 30–40 por fazenda. A série por pasto fica inteira no ramo `main`. |
 | Publicação | Grava `docs/data/<fazenda>.json` no repositório e publica `docs/` no GitHub Pages. |
 
+## Fontes de imagem
+
+| Satélite | Resolução | Acesso | Revisita sobre as fazendas |
+|---|---|---|---|
+| Sentinel-2 A/B/C (L2A) | 10 m | Copernicus Data Space (credenciais nos segredos; cota gratuita de 10.000 unidades/mês) | ~5 dias por órbita, com sobreposição de órbitas em parte das fazendas |
+| Landsat 8 e 9 (Collection 2 Level-2) | 30 m | Microsoft Planetary Computer — público, sem conta e sem cota | 8 dias combinados por trilha; as trilhas 225 e 226 se sobrepõem na região |
+
+As duas fontes usam reflectância de superfície corrigida da atmosfera, então o NDVI é comparável (diferença típica de
+0,01–0,02). Quando os dois satélites passam no mesmo dia, fica a imagem do Sentinel-2. No gráfico da série, ● é
+Sentinel-2 e ○ é Landsat. Para desligar o Landsat numa fazenda, use `"landsat": false` em `config/fazendas.json`.
+
 ## Fazendas
 
 | Chave | Fazenda | Unidades | Histórico desde |
