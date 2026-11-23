@@ -92,11 +92,16 @@ def fetch_ndvi(bbox, W, H, day):
                                            'mosaickingOrder': 'leastCC'}}]},
         'output': {'width': W, 'height': H, 'responses': [{'identifier': 'default', 'format': {'type': 'image/tiff'}}]},
         'evalscript': EVALSCRIPT}
-    for k in range(4):
-        r = session().post(PROCESS_URL, json=body, headers={'Accept': 'image/tiff'}, timeout=300)
-        if r.status_code == 429:
-            time.sleep(20 * (k + 1)); continue
-        r.raise_for_status(); break
+    for k in range(8):
+        try:
+            r = session().post(PROCESS_URL, json=body, headers={'Accept': 'image/tiff'}, timeout=300)
+        except Exception as e:      # queda de conexão: tenta de novo
+            print('  erro de conexão, nova tentativa:', e); time.sleep(15 * (k + 1)); continue
+        if r.status_code in (429, 500, 502, 503, 504):   # limite por minuto do Sentinel Hub ou instabilidade
+            time.sleep(min(20 * (k + 1), 120)); continue
+        break
+    r.raise_for_status()
+    time.sleep(float(os.environ.get('PAUSA', '2')))   # respeita o limite de unidades por minuto
     with rasterio.MemoryFile(r.content) as mf, mf.open() as ds:
         a = ds.read().astype('float32')
     return a[0], a[1]
@@ -170,6 +175,7 @@ def run_farm(key, f):
             reg['img'] = f'img/{key}/ndvi_{day}.png'
         D['passagens'].append(reg); novas += 1
         print(f'  {day}: cobertura {cob:.0%}, limpo {limpo:.0%}' + (' → mapa salvo' if reg['img'] else ''))
+        if novas % 10 == 0: save(D, datafile)
     D['passagens'].sort(key=lambda p: p['data'])
     for k in D['serie']:
         D['serie'][k] = sorted({r[0]: r for r in D['serie'][k]}.values())
@@ -180,20 +186,30 @@ def run_farm(key, f):
         fp = DOCS / p['img']
         if fp.exists(): fp.unlink()
         p['img'] = None
-    D['atualizado'] = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
-    datafile.write_text(json.dumps(D, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+    save(D, datafile)
     gj = DOCS / 'data' / f'{key}_pastos.geojson'
     gj.write_text(json.dumps(pastos, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     return novas
+
+def save(D, datafile):
+    D['atualizado'] = dt.datetime.now(dt.timezone.utc).strftime('%Y-%m-%dT%H:%MZ')
+    datafile.write_text(json.dumps(D, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
 
 def _rings(g):
     if g['type'] == 'Polygon': return g['coordinates']
     return [r for p in g['coordinates'] for r in p]
 
 if __name__ == '__main__':
-    total = 0
+    total = 0; falhas = []
+    so = os.environ.get('FAZENDAS')   # opcional: rodar só algumas (separadas por vírgula)
     for key, f in CFG.items():
-        total += run_farm(key, f)
-    idx = {k: {'nome': v['nome'], 'arquivo': f'data/{k}.json'} for k, v in CFG.items()}
+        if so and key not in so.split(','): continue
+        try:
+            total += run_farm(key, f)
+        except Exception as e:
+            import traceback; traceback.print_exc(); falhas.append(key)
+    idx = {k: {'nome': v['nome'], 'arquivo': f'data/{k}.json'} for k, v in CFG.items() if (DOCS / 'data' / f'{k}.json').exists()}
     (DOCS / 'data' / 'fazendas.json').write_text(json.dumps(idx, ensure_ascii=False), encoding='utf-8')
     print('passagens novas processadas:', total)
+    if falhas:
+        print('FAZENDAS COM ERRO:', ', '.join(falhas)); raise SystemExit(1)

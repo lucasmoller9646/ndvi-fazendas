@@ -1,4 +1,47 @@
 {
+  "ypoti": {
+    "nome": "Ypoti",
+    "pastos": "config/ypoti_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30,
+    "limite": "config/ypoti_limite.geojson"
+  },
+  "lusipar": {
+    "nome": "Lusipar",
+    "pastos": "config/lusipar_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "santa-clara": {
+    "nome": "Santa Clara",
+    "pastos": "config/santa-clara_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "ybypora": {
+    "nome": "Ybypora",
+    "pastos": "config/ybypora_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "oro-verde": {
+    "nome": "Oro Verde",
+    "pastos": "config/oro-verde_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "yby-pyta": {
+    "nome": "Yby Pytá (Cafetalera)",
+    "pastos": "config/yby-pyta_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
   "la-esperanza": {
     "nome": "La Esperanza",
     "pastos": "config/la-esperanza_pastos.geojson",
@@ -6,5 +49,33 @@
     "inicio": "2025-11-01",
     "min_limpo_mapa": 0.6,
     "mapas_guardados": 40
+  },
+  "ita-vera": {
+    "nome": "Ita Vera",
+    "pastos": "config/ita-vera_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "luna-blanca": {
+    "nome": "Luna Blanca",
+    "pastos": "config/luna-blanca_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "cielo-azul": {
+    "nome": "Cielo Azul",
+    "pastos": "config/cielo-azul_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "santa-maria": {
+    "nome": "Santa María",
+    "pastos": "config/santa-maria_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
   }
 }

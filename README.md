@@ -13,8 +13,26 @@ recentes do **Sentinel-2** (10 m, revisita de ~5 dias), com o NDVI médio de cad
 | Catálogo | `ndvi/run.py` pergunta ao Copernicus Data Space quais passagens do Sentinel-2 L2A cobrem cada fazenda e ainda não foram processadas. |
 | NDVI | Para cada data, pede ao Sentinel Hub (Process API) o NDVI já recortado no retângulo da fazenda, com nuvem, sombra e cirrus mascarados pela classificação de cena (SCL). |
 | Estatística | Calcula NDVI médio, P10 e P90 e a fração sem nuvem de cada pasto. Pasto com menos de 60% de área limpa não entra na série daquela data. |
-| Mapa | Se pelo menos 60% da fazenda estiver limpa, salva a imagem colorida em `docs/img/`. Os últimos 40 mapas ficam guardados; a série por pasto é mantida inteira. |
+| Mapa | Se pelo menos 60% da fazenda estiver limpa, salva a imagem colorida. Os mapas ficam no ramo `imagens`, regravado a cada execução sem histórico (para o repositório não crescer sem limite); guardam-se os últimos 30–40 por fazenda. A série por pasto fica inteira no ramo `main`. |
 | Publicação | Grava `docs/data/<fazenda>.json` no repositório e publica `docs/` no GitHub Pages. |
+
+## Fazendas
+
+| Chave | Fazenda | Unidades | Histórico desde |
+|---|---|---|---|
+| ypoti | Ypoti | 66 pastos (blocos A e C) + limite legal | 01/06/2026 |
+| lusipar | Lusipar | 71 pastos (Lusipar, Lusipar 1, Lusipar 2) | 01/06/2026 |
+| santa-clara | Santa Clara | 33 piquetes + área nova B16–B31 | 01/06/2026 |
+| ybypora | Ybypora | 37 piquetes | 01/06/2026 |
+| oro-verde | Oro Verde | 15 piquetes | 01/06/2026 |
+| yby-pyta | Yby Pytá (Cafetalera) | 21 pastos | 01/06/2026 |
+| la-esperanza | La Esperanza | 138 pastos com nome | 01/11/2025 |
+| ita-vera | Ita Vera | 33 pastos | 01/06/2026 |
+| luna-blanca | Luna Blanca | fazenda inteira | 01/06/2026 |
+| cielo-azul | Cielo Azul | fazenda inteira (rascunho) | 01/06/2026 |
+| santa-maria | Santa María | limite legal inteiro | 01/06/2026 |
+
+Para rodar só algumas fazendas, use **Run workflow** e preencha o campo com as chaves separadas por vírgula.
 
 Na primeira execução o histórico é preenchido desde a data `inicio` de `config/fazendas.json`.
 Depois disso, cada execução só olha os últimos 20 dias.

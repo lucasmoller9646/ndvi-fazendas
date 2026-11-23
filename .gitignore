@@ -1,3 +1,5 @@
 __pycache__/
 *.tif
 .env
+docs/img/*
+!docs/img/.gitkeep

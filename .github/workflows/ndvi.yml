@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "17 15 * * *"   # todo dia às 12:17 de Assunção/Brasília (15:17 UTC)
   workflow_dispatch:         # botão "Run workflow" para rodar na hora
+    inputs:
+      fazendas:
+        description: "Só estas fazendas (chaves separadas por vírgula; vazio = todas)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -17,7 +22,7 @@ concurrency:
 jobs:
   ndvi:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 240
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
@@ -28,21 +33,44 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt
+
+      # Os mapas (PNG) ficam no ramo "imagens", regravado a cada execução sem histórico,
+      # para o repositório não crescer sem limite. A série por pasto fica no ramo main.
+      - name: Trazer os mapas já gerados
+        run: |
+          if git ls-remote --exit-code origin imagens >/dev/null; then
+            git fetch --depth 1 origin imagens
+            git archive origin/imagens img | tar -x -C docs
+          fi
+          ls docs/img | head
+
       - name: Baixar e processar passagens novas do Sentinel-2
         env:
           PYTHONUNBUFFERED: "1"
+          FAZENDAS: ${{ github.event.inputs.fazendas }}
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
         run: python ndvi/run.py
-      - name: Gravar resultados no repositório
+
+      - name: Gravar série no main e mapas no ramo imagens
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "ndvi-bot"
           git config user.email "ndvi-bot@users.noreply.github.com"
-          git add docs
-          if git diff --cached --quiet; then echo "sem novidades"; else git commit -m "NDVI: passagens até $(date -u +%F)" && git push; fi
+          git add docs/data
+          if git diff --cached --quiet; then echo "sem novidades na série"; else git commit -m "NDVI: passagens até $(date -u +%F)" && git push; fi
+          TMP=$(mktemp -d); mkdir -p "$TMP/img"; cp -r docs/img/. "$TMP/img/"
+          cd "$TMP" && git init -q -b imagens && git add -A && git -c user.name=ndvi-bot -c user.email=ndvi-bot@users.noreply.github.com commit -qm "mapas NDVI $(date -u +%F)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" imagens
+
       - uses: actions/configure-pages@v5
+        if: always()
       - uses: actions/upload-pages-artifact@v3
+        if: always()
         with:
           path: docs
       - id: deploy
+        if: always()
         uses: actions/deploy-pages@v4
