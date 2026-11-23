@@ -82,6 +82,7 @@ body.locked header,body.locked main{visibility:hidden}
     <button id="prev" aria-label="Imagem anterior">‹</button><select id="data"></select><button id="next" aria-label="Próxima imagem">›</button>
     <label class="muted" for="ret">Retiro</label><select id="ret"><option value="">Todos</option></select>
     <label class="muted" for="esc">Escala</label><select id="esc"><option value="max">Máximo contraste</option><option value="fixa">Fixa (−0,2 a 0,95)</option></select>
+    <label class="muted" for="pal">Cores</label><select id="pal"><option value="esp">Espectro em 14 classes</option><option value="cont">Marrom–verde contínuo</option></select>
     <label class="muted"><input type="checkbox" id="opac" checked> NDVI sobre o satélite</label>
     <label class="muted" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho</label>
     <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
@@ -103,7 +104,7 @@ body.locked header,body.locked main{visibility:hidden}
         <div class="kpi"><b id="k2">–</b><span>variação vs. imagem anterior</span></div>
         <div class="kpi"><b id="k3">–</b><span>área sem nuvem</span></div>
       </div>
-      <div class="leg" style="margin-top:10px"><span>menor</span><div class="bar" id="bar"></div><span>maior</span></div>
+      <div class="leg" style="margin-top:10px"><span>NDVI baixo</span><div class="bar" id="bar"></div><span>NDVI alto</span></div>
       <div class="ticks" id="ticks"></div>
       <div class="muted" id="escnota" style="margin-top:3px"></div>
     </div>
@@ -149,10 +150,18 @@ let aberto=false;
 function abrir(){if(aberto)return;aberto=true;$('#gate').remove();document.body.classList.remove('locked');map.invalidateSize();init()}
 
 /* ---------------- cores e escala ---------------- */
-const RAMP=[[120,80,50],[165,120,75],[215,180,110],[235,225,140],[170,205,110],[95,170,75],[35,120,50],[10,70,30]];
-const LUT=new Uint8ClampedArray(256*3);
-for(let i=0;i<256;i++){const t=i/255*(RAMP.length-1),k=Math.min(RAMP.length-2,Math.floor(t)),f=t-k;for(let c=0;c<3;c++)LUT[i*3+c]=Math.round(RAMP[k][c]+(RAMP[k+1][c]-RAMP[k][c])*f)}
-$('#bar').style.background=`linear-gradient(90deg,${RAMP.map((c,i)=>`rgb(${c})`+` ${Math.round(i/(RAMP.length-1)*100)}%`).join(',')})`;
+const PALS={
+  esp:{classes:true,c:[[184,58,14],[246,128,43],[249,162,31],[251,191,11],[212,207,39],[163,207,44],[118,207,42],[63,191,40],[31,189,91],[34,168,143],[43,143,188],[26,119,153],[10,79,140],[29,47,126]]},
+  cont:{classes:false,c:[[120,80,50],[165,120,75],[215,180,110],[235,225,140],[170,205,110],[95,170,75],[35,120,50],[10,70,30]]}};
+const LUT=new Uint8ClampedArray(256*3);let PAL='esp';
+function montaLUT(){const P=PALS[PAL],R=P.c,n=R.length;
+  for(let i=0;i<256;i++){let rgb;
+    if(P.classes){rgb=R[Math.min(n-1,Math.floor(i/256*n))]}
+    else{const t=i/255*(n-1),k=Math.min(n-2,Math.floor(t)),f=t-k;rgb=R[k].map((c,j)=>c+(R[k+1][j]-c)*f)}
+    for(let c=0;c<3;c++)LUT[i*3+c]=Math.round(rgb[c])}
+  $('#bar').style.background=P.classes?`linear-gradient(90deg,${R.map((c,i)=>`rgb(${c}) ${(i/n*100).toFixed(2)}%,rgb(${c}) ${((i+1)/n*100).toFixed(2)}%`).join(',')})`
+    :`linear-gradient(90deg,${R.map((c,i)=>`rgb(${c}) ${Math.round(i/(n-1)*100)}%`).join(',')})`}
+PAL=st.get('ndvi_pal')||'esp';if(!PALS[PAL])PAL='esp';$('#pal').value=PAL;montaLUT();
 let LO=-0.2,HI=0.95;
 function col(v){if(v==null)return '#888';const i=Math.max(0,Math.min(255,Math.round((v-LO)/(HI-LO)*255)));return `rgb(${LUT[i*3]},${LUT[i*3+1]},${LUT[i*3+2]})`}
 const q2v=q=>(q-1)/254*1.15-0.2;
@@ -241,7 +250,7 @@ function pintar(){
   cx.putImageData(out,0,0);RAST.canvas=cv;
   const [w,s,e,n]=D.bbox;
   if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:$('#opac').checked?0.92:0,interactive:false}).addTo(map);
-  const t=[0,0.25,0.5,0.75,1].map(f=>fmt(LO+(HI-LO)*f));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
+  const nt=PALS[PAL].classes?8:5;const t=[...Array(nt).keys()].map(i=>fmt(LO+(HI-LO)*i/(nt-1)));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
 }
 async function setDate(i){
   if(i<0||i>=passImgs.length){$('#sub').textContent='Ainda sem imagem limpa processada.';return}
@@ -396,6 +405,7 @@ $('#data').onchange=()=>setDate(+$('#data').value);
 $('#prev').onclick=()=>setDate(Math.max(0,+$('#data').value-1));
 $('#next').onclick=()=>setDate(Math.min(passImgs.length-1,+$('#data').value+1));
 $('#ret').onchange=refresh;$('#faz').onchange=()=>loadFarm($('#faz').value);
+$('#pal').onchange=()=>{PAL=$('#pal').value;st.set('ndvi_pal',PAL);montaLUT();if(RAST)pintar();refresh()};
 $('#esc').onchange=()=>{st.set('ndvi_esc',$('#esc').value);escala();if(RAST)pintar();refresh()};
 $('#obr').onchange=()=>{camadas();refresh()};
 $('#obtb').onclick=e=>{const tr=e.target.closest('tr');if(!tr||!D.obras.areas.includes(tr.dataset.a))return;obOpen[tr.dataset.a]=!obOpen[tr.dataset.a];drawObras()};
