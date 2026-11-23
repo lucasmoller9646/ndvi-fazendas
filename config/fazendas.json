@@ -48,11 +48,25 @@
     "limite": "config/la-esperanza_limite.geojson",
     "inicio": "2025-11-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 40
+    "mapas_guardados": 40,
+    "obras": {
+      "geojson": "config/la-esperanza_obras.geojson",
+      "inicio": "2026-10-01",
+      "limiar_solo": 0.35,
+      "limiar_verde": 0.55,
+      "min_limpo": 0.9
+    }
   },
   "ita-vera": {
     "nome": "Ita Vera",
     "pastos": "config/ita-vera_pastos.geojson",
+    "inicio": "2026-06-01",
+    "min_limpo_mapa": 0.6,
+    "mapas_guardados": 30
+  },
+  "cerro-memby": {
+    "nome": "Cerro Memby",
+    "pastos": "config/cerro-memby_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
     "mapas_guardados": 30

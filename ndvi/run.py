@@ -18,6 +18,7 @@ import rasterio
 from rasterio.features import rasterize
 from rasterio.transform import from_bounds
 from shapely.geometry import shape
+from obras import Obras
 
 ROOT = Path(__file__).resolve().parents[1]
 CFG = json.loads((ROOT / 'config' / 'fazendas.json').read_text(encoding='utf-8'))
@@ -132,6 +133,7 @@ def run_farm(key, f):
     ids = rasterize([(shape(ft['geometry']), i + 1) for i, ft in enumerate(feats)], out_shape=(H, W), transform=T,
                     fill=0, dtype='int32', all_touched=False)
     inside = ids > 0
+    ob = Obras(ROOT, DOCS, key, f['obras'], T, H, W) if f.get('obras') else None
     datafile = DOCS / 'data' / f'{key}.json'
     D = json.loads(datafile.read_text(encoding='utf-8')) if datafile.exists() else {
         'fazenda': f['nome'], 'bbox': bbox, 'pastos_geojson': f'data/{key}_pastos.geojson', 'passagens': [], 'serie': {}}
@@ -169,6 +171,7 @@ def run_farm(key, f):
             D['serie'].setdefault(pid, []).append([day, round(float(soma[i] / nval[i]), 3),
                                                    round(float(np.percentile(vv, 10)), 3),
                                                    round(float(np.percentile(vv, 90)), 3), round(float(fr), 2)])
+        if ob: ob.update(day, nd, limpo, D)
         if limpo >= f.get('min_limpo_mapa', 0.6):
             img = DOCS / 'img' / key / f'ndvi_{day}.png'; img.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(colorize(nd, nd > -1.5)).convert('RGBA').quantize(colors=96, method=Image.Quantize.FASTOCTREE).save(img, optimize=True)
@@ -176,6 +179,11 @@ def run_farm(key, f):
         D['passagens'].append(reg); novas += 1
         print(f'  {day}: cobertura {cob:.0%}, limpo {limpo:.0%}' + (' → mapa salvo' if reg['img'] else ''))
         if novas % 10 == 0: save(D, datafile)
+    if ob:
+        ob.save()
+        gj = DOCS / 'data' / f'{key}_obras.geojson'
+        gj.write_text(json.dumps(ob.gj, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+        D['obras_geojson'] = f'data/{key}_obras.geojson'
     D['passagens'].sort(key=lambda p: p['data'])
     for k in D['serie']:
         D['serie'][k] = sorted({r[0]: r for r in D['serie'][k]}.values())

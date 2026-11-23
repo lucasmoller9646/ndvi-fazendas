@@ -60,7 +60,7 @@ jobs:
           git config user.name "ndvi-bot"
           git config user.email "ndvi-bot@users.noreply.github.com"
           git add docs/data
-          if git diff --cached --quiet; then echo "sem novidades na série"; else git commit -m "NDVI: passagens até $(date -u +%F)" && git push; fi
+          if git diff --cached --quiet; then echo "sem novidades na série"; else git commit -m "NDVI: passagens até $(date -u +%F)" && git pull --rebase -X theirs origin main && git push; fi
           TMP=$(mktemp -d); mkdir -p "$TMP/img"; cp -r docs/img/. "$TMP/img/"
           cd "$TMP" && git init -q -b imagens && git add -A && git -c user.name=ndvi-bot -c user.email=ndvi-bot@users.noreply.github.com commit -qm "mapas NDVI $(date -u +%F)"
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" imagens

@@ -28,6 +28,7 @@ recentes do **Sentinel-2** (10 m, revisita de ~5 dias), com o NDVI médio de cad
 | yby-pyta | Yby Pytá (Cafetalera) | 21 pastos | 01/06/2026 |
 | la-esperanza | La Esperanza | 138 pastos com nome | 01/11/2025 |
 | ita-vera | Ita Vera | 33 pastos | 01/06/2026 |
+| cerro-memby | Cerro Memby | 51 pastos + sede | 01/06/2026 |
 | luna-blanca | Luna Blanca | fazenda inteira | 01/06/2026 |
 | cielo-azul | Cielo Azul | fazenda inteira (rascunho) | 01/06/2026 |
 | santa-maria | Santa María | limite legal inteiro | 01/06/2026 |
@@ -36,6 +37,14 @@ Para rodar só algumas fazendas, use **Run workflow** e preencha o campo com as 
 
 Na primeira execução o histórico é preenchido desde a data `inicio` de `config/fazendas.json`.
 Depois disso, cada execução só olha os últimos 20 dias.
+
+## Avanço das áreas de trabalho (La Esperanza)
+
+`config/la-esperanza_obras.geojson` traz as 16 subáreas de abertura (1A a 5C, encaixadas no miolo). Para cada imagem com
+pelo menos 90% da fazenda sem nuvem, `ndvi/obras.py` marca como **trabalhado** o pixel que aparece como solo exposto
+(0 ≤ NDVI < 0,35) a partir de `inicio` e que não era solo antes (estradas, currais, aguadas). Também calcula a parte
+com **solo exposto agora** e a parte já trabalhada que ficou **verde de novo** (NDVI ≥ 0,55). O estado pixel a pixel fica em
+`docs/img/_estado/` (ramo `imagens`). `ndvi/backfill_obras.py` reconstrói tudo a partir dos mapas já guardados.
 
 ## Credenciais (segredos do repositório)
 
