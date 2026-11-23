@@ -70,7 +70,7 @@ tr.sel{background:color-mix(in srgb,var(--acc) 15%,transparent)!important}
     <div class="card chart">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b id="ctit">Série histórica</b><span class="muted" id="cinfo"></span></div>
       <div id="chart"></div>
-      <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · tracejado: média da fazenda</div>
+      <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:baseline"><b>Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
@@ -143,7 +143,9 @@ function refresh(){
 }
 function pick(id){sel=sel===id?null:id;refresh();const tr=document.querySelector(`tr[data-id="${CSS.escape(id)}"]`);if(tr)tr.scrollIntoView({block:'nearest'})}
 function farmMean(){const by={};for(const f of GJ.features){if($('#ret').value&&f.properties.retiro!==$('#ret').value)continue;for(const r of (D.serie[f.properties.id]||[])){(by[r[0]]??=[0,0]);by[r[0]][0]+=r[1]*f.properties.area_ha;by[r[0]][1]+=f.properties.area_ha}}
-  return Object.entries(by).filter(([,v])=>v[1]>0).sort().map(([d,v])=>[d,v[0]/v[1]])}
+  const tot=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).reduce((a,f)=>a+f.properties.area_ha,0);
+  // só datas em que pelo menos 70% da área foi medida: datas parciais distorcem a média (mede só os pastos sem nuvem)
+  return Object.entries(by).filter(([,v])=>v[1]>=0.7*tot).sort().map(([d,v])=>[d,v[0]/v[1]])}
 function drawChart(){
   const fm=farmMean();const s=sel?D.serie[sel]||[]:[];
   const f=sel?GJ.features.find(x=>x.properties.id===sel):null;
