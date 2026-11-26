@@ -68,8 +68,11 @@ mestra a cada cinco. Como o relevo não muda, cada fazenda só é processada uma
 retângulo mudar); fazenda nova ganha o relevo na primeira execução do workflow.
 
 Na página: **Curvas de nível** liga as curvas sobre o mapa (rótulos a partir do zoom 13) e o canto inferior esquerdo mostra a
-altitude sob o cursor. **Relevo 3D** abre o terreno em 3D com o NDVI da imagem selecionada ou com cores de altitude, as
-curvas, os pastos e os nomes, com exagero vertical de 1 a 10 vezes. O DEM de 30 m mede a superfície (inclui a altura das
+altitude sob o cursor. **Mapa | 3D** troca a vista: em 3D o terreno da fazenda aparece com o NDVI da imagem selecionada ou com cores de
+altitude, as curvas, os pastos e os nomes, com exagero vertical de 1 a 10 vezes; a fazenda, a imagem, a escala e as cores
+do topo continuam valendo. Cada clique no terreno marca um ponto com a altitude e o declive (graus e %, e para onde o
+terreno cai); com dois ou mais pontos o painel lateral mostra o perfil do caminho (comprimento, subida e descida
+acumuladas, declive máximo em trechos de 30 m e declive médio), que pode ser exportado em CSV. O DEM de 30 m mede a superfície (inclui a altura das
 matas), com erro vertical típico de 2 a 4 m: serve para planejar e orientar, não substitui levantamento topográfico.
 
 ## Senha da página

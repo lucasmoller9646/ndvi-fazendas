@@ -66,19 +66,30 @@ body.locked header,body.locked main{visibility:hidden}
 .clbl{background:none;border:none;box-shadow:none;color:#ffe9b8;font-weight:600;font-size:10px;padding:0;text-shadow:0 0 3px #000,0 0 2px #000,0 0 1px #000}
 .clbl:before{display:none}
 .altbox{background:rgba(18,26,27,.82);color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;font-variant-numeric:tabular-nums}
-#b3d{border-color:var(--acc);color:var(--acc);font-weight:600}
-#v3d{position:fixed;inset:0;z-index:4000;background:#0d1314;display:flex;flex-direction:column}
-#v3d[hidden]{display:none}
-.v3bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line)}
-.v3bar b{font-size:15px}
-.v3wrap{position:relative;flex:1;min-height:0}
+.seg{display:inline-flex;border:1px solid var(--acc);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:5px 12px;color:var(--acc);font-weight:600;background:var(--card)}
+.seg button[aria-pressed="true"]{background:var(--acc);color:#fff}
+#vista{position:relative;min-width:0;align-self:start}
+#v3{position:absolute;inset:0;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#0d1314}
+#v3[hidden]{display:none}
 #v3c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
-#v3alt{position:absolute;left:12px;bottom:12px}
-#v3leg{position:absolute;right:12px;bottom:12px;width:min(300px,60vw);background:rgba(18,26,27,.82);color:#fff;border-radius:8px;padding:7px 10px;font-size:11.5px}
+.v3bar{position:absolute;left:10px;top:10px;right:10px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;pointer-events:none}
+.v3bar>*{pointer-events:auto}
+.v3bar label{background:rgba(18,26,27,.8);color:#e6eeec;font-size:12px;padding:3px 8px;border-radius:7px;display:inline-flex;gap:5px;align-items:center}
+.v3bar select{padding:2px 4px;font-size:12px}
+.v3bar button{font-size:12px;padding:4px 9px;background:rgba(18,26,27,.8);color:#e6eeec;border-color:rgba(255,255,255,.25)}
+#v3lbl{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pin{position:absolute;transform:translate(-50%,-130%);background:#ffd400;color:#111;font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pin.last{background:#fff}
+#v3tip{position:absolute;left:50%;top:48px;transform:translateX(-50%);background:rgba(18,26,27,.75);color:#e6eeec;font-size:11.5px;padding:4px 10px;border-radius:6px;pointer-events:none;white-space:nowrap}
+#v3msg[hidden]{display:none}
+#v3msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e6eeec;padding:20px;text-align:center}
+#v3alt{position:absolute;left:10px;bottom:44px}
+#v3leg{position:absolute;right:10px;bottom:44px;width:min(300px,60%);background:rgba(18,26,27,.82);color:#fff;border-radius:8px;padding:7px 10px;font-size:11.5px}
 #v3leg .bar{height:9px;border-radius:3px;margin:4px 0 2px}
 #v3leg .ticks{color:#cfd8d6}
-#v3tip{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(18,26,27,.75);color:#e6eeec;font-size:11.5px;padding:4px 10px;border-radius:6px;pointer-events:none;white-space:nowrap}
-@media (max-width:700px){#v3tip{display:none}}
+#v3info{position:absolute;left:10px;bottom:10px;color:#cfd8d6;font-size:11px;text-shadow:0 0 3px #000;max-width:45%}
+@media (max-width:700px){#v3tip,#v3info{display:none}}
 </style>
 </head>
 <body class="locked">
@@ -104,7 +115,7 @@ body.locked header,body.locked main{visibility:hidden}
     <label class="muted"><input type="checkbox" id="opac" checked> NDVI sobre o satélite</label>
     <label class="muted" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho</label>
     <label class="muted" id="rvl" hidden><input type="checkbox" id="curv"> Curvas de nível</label>
-    <button id="b3d" hidden title="Terreno em 3D com o NDVI da imagem selecionada">Relevo 3D</button>
+    <span class="seg" id="vsw" role="group" aria-label="Vista"><button data-v="mapa" aria-pressed="true">Mapa</button><button data-v="3d" aria-pressed="false" title="Terreno em 3D com o NDVI da imagem selecionada ou a altitude">3D</button></span>
     <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
       <button data-x="tif">GeoTIFF do NDVI<small>valores em cada pixel de 10 m · abre no QGIS/ArcGIS</small></button>
       <button data-x="kmz">KMZ para Google Earth<small>imagem colorida como na tela, já posicionada</small></button>
@@ -116,8 +127,30 @@ body.locked header,body.locked main{visibility:hidden}
   </div>
 </header>
 <main>
+  <div id="vista">
   <div id="map"></div>
+  <div id="v3" hidden>
+    <canvas id="v3c" tabindex="0" aria-label="Terreno da fazenda em 3D"></canvas>
+    <div id="v3lbl"></div>
+    <div class="v3bar">
+      <label>Exagero <select id="v3ex"><option value="1">×1 (real)</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option><option value="10">×10</option></select></label>
+      <label>Cores <select id="v3tx"><option value="ndvi">NDVI da imagem</option><option value="alt">Altitude</option></select></label>
+      <label><input type="checkbox" id="v3ps" checked> Pastos</label>
+      <label><input type="checkbox" id="v3nm"> Nomes</label>
+      <button id="v3undo" title="Tirar o último ponto">↶ Ponto</button><button id="v3clr">Limpar caminho</button>
+    </div>
+    <div id="v3tip">clique = marcar ponto · arrastar = girar · botão direito ou 2 dedos = deslocar · roda = zoom</div>
+    <div id="v3msg" hidden></div>
+    <div id="v3alt" class="altbox" hidden></div><div id="v3leg"></div>
+    <div id="v3info"></div>
+  </div>
+  </div>
   <div class="side">
+    <div class="card" id="pfcard" hidden>
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>Perfil do terreno</b><span class="muted" id="pfinfo"></span></div>
+      <div id="pfbody"></div>
+      <div class="ctl" style="margin-top:8px"><button id="pfundo">↶ Tirar último ponto</button><button id="pfclr">Limpar caminho</button><button id="pfcsv">Exportar perfil (CSV)</button></div>
+    </div>
     <div class="card">
       <div class="kpis">
         <div class="kpi"><b id="k1">–</b><span>NDVI médio dos pastos</span></div>
@@ -146,21 +179,6 @@ body.locked header,body.locked main{visibility:hidden}
     <div class="muted">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
   </div>
 </main>
-<div id="v3d" hidden>
-  <div class="v3bar">
-    <b id="v3tit">Relevo 3D</b>
-    <label class="muted">Exagero vertical <select id="v3ex"><option value="1">×1 (real)</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option><option value="10">×10</option></select></label>
-    <label class="muted">Cores <select id="v3tx"><option value="ndvi">NDVI da imagem</option><option value="alt">Altitude</option></select></label>
-    <label class="muted"><input type="checkbox" id="v3cv" checked> Curvas</label>
-    <label class="muted"><input type="checkbox" id="v3ps" checked> Pastos</label>
-    <label class="muted"><input type="checkbox" id="v3nm"> Nomes</label>
-    <span class="muted" id="v3info"></span>
-    <button id="v3x" style="margin-left:auto">Fechar</button>
-  </div>
-  <div class="v3wrap"><canvas id="v3c" tabindex="0" aria-label="Terreno da fazenda em 3D"></canvas>
-    <div id="v3tip">arrastar = girar · botão direito ou 2 dedos = deslocar · roda = zoom</div>
-    <div id="v3alt" class="altbox" hidden></div><div id="v3leg"></div></div>
-</div>
 <script>
 const $=s=>document.querySelector(s);
 const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -216,9 +234,10 @@ async function init(){
   for(const [k,v] of Object.entries(IDX)){const o=document.createElement('option');o.value=k;o.textContent=v.nome;$('#faz').appendChild(o)}
   let k0=st.get('ndvi_faz');if(!IDX[k0])k0=Object.keys(IDX)[0];
   $('#faz').value=k0;await loadFarm(k0);
+  if(VISTA==='3d')setVista('3d');
 }
 async function loadFarm(k){
-  st.set('ndvi_faz',k);FKEY=k;MASK=null;sel=null;
+  st.set('ndvi_faz',k);FKEY=k;MASK=null;sel=null;desmontar3D();PATH=[];atualizaCaminho();if(VISTA==='3d'){$('#v3msg').hidden=false;$('#v3msg').textContent='carregando…'}
   D=await (await fetch(IDX[k].arquivo,{cache:'no-store'})).json();
   GJ=await (await fetch(D.pastos_geojson,{cache:'no-store'})).json();
   $('#titulo').textContent='NDVI — '+D.fazenda;
@@ -284,10 +303,11 @@ function pintar(){
   const out=cx.createImageData(W,H);const o=out.data;const k=255/(HI-LO);
   const map8=new Uint8Array(256);for(let v=1;v<256;v++)map8[v]=Math.max(0,Math.min(255,Math.round((q2v(v)-LO)*k)));
   for(let i=0,j=0;i<q.length;i++,j+=4){const v=q[i];if(!v){o[j+3]=0;continue}const c=map8[v]*3;o[j]=LUT[c];o[j+1]=LUT[c+1];o[j+2]=LUT[c+2];o[j+3]=255}
-  cx.putImageData(out,0,0);RAST.canvas=cv;
+  cx.putImageData(out,0,0);RAST.canvas=cv;RAST.key=FKEY;
   const [w,s,e,n]=D.bbox;
   if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:$('#opac').checked?0.92:0,interactive:false}).addTo(map);
   const nt=PALS[PAL].classes?8:5;const t=[...Array(nt).keys()].map(i=>fmt(LO+(HI-LO)*i/(nt-1)));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
+  retex3D();
 }
 async function setDate(i){
   if(i<0||i>=passImgs.length){$('#sub').textContent='Ainda sem imagem limpa processada.';return}
@@ -445,7 +465,7 @@ map.createPane('relevo');map.getPane('relevo').style.zIndex=380;map.getPane('rel
 const altCtl=L.control({position:'bottomleft'});altCtl.onAdd=()=>{const d=L.DomUtil.create('div','altbox');d.id='alt';d.hidden=true;return d};altCtl.addTo(map);
 $('#curv').checked=st.get('ndvi_curv')==='1';
 async function loadRelevo(k){
-  REL=null;if(curvLayer){curvLayer.remove();curvLayer=null}curvLbl.clearLayers();$('#rvl').hidden=true;$('#b3d').hidden=true;$('#alt').hidden=true;
+  REL=null;if(curvLayer){curvLayer.remove();curvLayer=null}curvLbl.clearLayers();$('#rvl').hidden=true;$('#alt').hidden=true;
   let meta;try{const r=await fetch(`relevo/${k}.json`,{cache:'no-store'});if(!r.ok)return;meta=await r.json()}catch(e){return}
   if(FKEY!==k)return;
   let im;try{im=await loadImg(meta.dem)}catch(e){return}
@@ -453,9 +473,10 @@ async function loadRelevo(k){
   const px=cx.getImageData(0,0,meta.W,meta.H).data;const z=new Float32Array(meta.W*meta.H);
   for(let i=0,j=0;i<z.length;i++,j+=4)z[i]=meta.zmin+(px[j]*256+px[j+1])/10;
   if(FKEY!==k)return;
-  REL={...meta,z};$('#rvl').hidden=false;$('#b3d').hidden=false;
+  REL={...meta,z};$('#rvl').hidden=false;
   $('#rvl').title=`Curvas a cada ${REL.equidistancia} m (mestras a cada ${REL.mestra} m) · ${REL.fonte}, ${REL.resolucao_m} m · altitude de ${fmt(REL.zmin,0)} a ${fmt(REL.zmax,0)} m`;
   await curvas();
+  if(VISTA==='3d')await montar3D();
 }
 async function curvas(){
   if(!REL)return;st.set('ndvi_curv',$('#curv').checked?'1':'0');
@@ -482,12 +503,13 @@ function altEm(lat,lng){
 map.on('mousemove',e=>{const a=altEm(e.latlng.lat,e.latlng.lng);const el=$('#alt');if(!el)return;if(a==null){el.hidden=true;return}el.hidden=false;el.textContent=`altitude ${fmt(a,0)} m`});
 map.on('mouseout',()=>{const el=$('#alt');if(el)el.hidden=true});
 map.on('moveend',rotulosCurvas);
-$('#curv').onchange=curvas;
+$('#curv').onchange=async()=>{await curvas();retex3D()};
 
-/* ---- 3D ---- */
+/* ---- vista 3D (um modo de visualização, como o mapa) ---- */
 const HIPSO=[[0,[47,104,66]],[0.3,[118,160,84]],[0.55,[201,194,122]],[0.78,[178,132,82]],[1,[236,230,222]]];
 function hipso(t){t=Math.max(0,Math.min(1,t));for(let k=1;k<HIPSO.length;k++)if(t<=HIPSO[k][0]){const [a,ca]=HIPSO[k-1],[b,cb]=HIPSO[k];const f=(t-a)/(b-a);return ca.map((c,i)=>c+(cb[i]-c)*f)}return HIPSO[HIPSO.length-1][1]}
 function dimsM(){const [w,s,e,n]=REL.bbox;const lat=(s+n)/2;return [(e-w)*111320*Math.cos(lat*Math.PI/180),(n-s)*110570]}
+const mPorGrau=lat=>[111320*Math.cos(lat*Math.PI/180),110570];
 function imgAltitude(){ // altitude em cores com sombreado (luz de noroeste)
   const {W,H,z,zmin,zmax}=REL;const [WM,HM]=dimsM();const dx=WM/W,dy=HM/H;const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const cx=cv.getContext('2d');const o=cx.createImageData(W,H);const d=o.data;const rg=Math.max(1,zmax-zmin);
@@ -502,9 +524,9 @@ function textura3D(modo){
   const [w,s,e,n]=REL.bbox;const [WM,HM]=dimsM();const TW=2048,TH=Math.min(4096,Math.round(TW*HM/WM));
   const cv=document.createElement('canvas');cv.width=TW;cv.height=TH;const cx=cv.getContext('2d');
   cx.imageSmoothingEnabled=true;cx.drawImage(REL.altImg||(REL.altImg=imgAltitude()),0,0,TW,TH);
-  if(modo==='ndvi'&&RAST?.canvas)cx.drawImage(RAST.canvas,0,0,TW,TH);
-  const X=x=>(x-w)/(e-w)*TW,Y=y=>(n-y)/(n-s)*TH;const kpx=TW/WM*30; // ~30 m em pixels
-  if($('#v3cv').checked&&REL.gj){for(const f of REL.gj.features){const c=f.geometry.coordinates;cx.beginPath();c.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));
+  if(modo==='ndvi'&&RAST?.canvas&&RAST.key===FKEY)cx.drawImage(RAST.canvas,0,0,TW,TH);
+  const X=x=>(x-w)/(e-w)*TW,Y=y=>(n-y)/(n-s)*TH;const kpx=TW/WM*30;
+  if($('#curv').checked&&REL.gj){for(const f of REL.gj.features){const c=f.geometry.coordinates;cx.beginPath();c.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));
       cx.lineWidth=f.properties.mestra?Math.max(1.6,kpx*0.12):Math.max(0.8,kpx*0.05);
       cx.strokeStyle=modo==='ndvi'?(f.properties.mestra?'rgba(255,236,190,.95)':'rgba(255,248,230,.6)'):(f.properties.mestra?'rgba(70,45,20,.85)':'rgba(70,45,20,.45)');cx.stroke()}}
   if($('#v3ps').checked&&GJ){cx.strokeStyle='rgba(255,255,255,.95)';cx.lineWidth=Math.max(1.5,kpx*0.1);cx.lineJoin='round';
@@ -513,64 +535,150 @@ function textura3D(modo){
   if($('#v3nm').checked&&GJ){const fs=Math.round(Math.max(12,Math.min(26,TW/90)));cx.font=`600 ${fs}px system-ui,sans-serif`;cx.textAlign='center';cx.textBaseline='middle';
     for(const f of GJ.features){const b=L.geoJSON(f).getBounds().getCenter();cx.lineWidth=fs/4;cx.strokeStyle='rgba(0,0,0,.75)';cx.strokeText(f.properties.nome,X(b.lng),Y(b.lat));cx.fillStyle='#fff';cx.fillText(f.properties.nome,X(b.lng),Y(b.lat))}}
   return cv}
-let V3=null;
-async function abrir3D(){
-  if(!REL)return;
+function dentro([x,y],g){const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+  for(const p of polys){let ins=false;for(const ring of p)for(let i=0,j=ring.length-1;i<ring.length;j=i++){const [xi,yi]=ring[i],[xj,yj]=ring[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}if(ins)return true}return false}
+function pastoEm(lng,lat){if(!GJ)return null;for(const f of GJ.features)if(dentro([lng,lat],f.geometry))return f.properties;return null}
+const RUMOS=['N','NE','L','SE','S','SO','O','NO'];
+function pontoInfo(lat,lng){ // altitude, declive (° e %) e para onde o terreno cai
+  const z=altEm(lat,lng);if(z==null)return null;const [mx,my]=mPorGrau(lat);const h=30;
+  const ze=altEm(lat,lng+h/mx),zw=altEm(lat,lng-h/mx),zn=altEm(lat+h/my,lng),zs=altEm(lat-h/my,lng);
+  const gx=((ze??z)-(zw??z))/(2*h),gy=((zn??z)-(zs??z))/(2*h);const g=Math.hypot(gx,gy);
+  const az=(Math.atan2(-gx,-gy)*180/Math.PI+360)%360;
+  return {lat,lng,z,graus:Math.atan(g)*180/Math.PI,pct:g*100,face:g<0.003?'plano':RUMOS[Math.round(az/45)%8]}}
+
+let VISTA=st.get('ndvi_vista')==='3d'?'3d':'mapa',V3=null,THREEm=null,PATH=[],PERFIL=null;
+async function setVista(v){
+  VISTA=v;st.set('ndvi_vista',v);
+  document.querySelectorAll('#vsw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));
+  $('#map').style.visibility=v==='3d'?'hidden':'';$('#v3').hidden=v!=='3d';$('#pfcard').hidden=v!=='3d';
+  if(v==='3d')await montar3D();else{desmontar3D();map.invalidateSize()}
+}
+function desmontar3D(){if(!V3)return;V3.stop();V3.ro.disconnect();V3.ctl.dispose();V3.sc.traverse(o=>{o.geometry?.dispose();if(o.material){o.material.map?.dispose();o.material.dispose()}});V3.R.dispose();$('#v3lbl').innerHTML='';V3=null}
+async function montar3D(){
+  desmontar3D();
+  if(!REL){$('#v3msg').hidden=false;$('#v3msg').textContent=GJ?'O relevo desta fazenda ainda não foi gerado — aparece depois da próxima atualização automática.':'carregando…';return}
+  $('#v3msg').hidden=true;const key=FKEY;
   if(!REL.gj){try{REL.gj=await (await fetch(REL.curvas,{cache:'no-store'})).json()}catch(e){}}
-  $('#v3d').hidden=false;$('#v3tit').textContent='Relevo 3D — '+D.fazenda;
+  if(!st.get('ndvi_v3ex'))$('#v3ex').value=(REL.zmax-REL.zmin)<80?'5':'3';
   $('#v3tx').querySelector('[value=ndvi]').disabled=!RAST;if(!RAST)$('#v3tx').value='alt';
-  if(!st.get('ndvi_v3ex'))$('#v3ex').value=(REL.zmax-REL.zmin)<80?'5':'3';else $('#v3ex').value=st.get('ndvi_v3ex');
-  let THREE,OrbitControls;
-  try{THREE=await import('three');({OrbitControls}=await import('three/addons/controls/OrbitControls.js'))}
-  catch(e){$('#v3info').textContent='Não foi possível carregar o 3D neste navegador.';return}
-  const cv=$('#v3c');const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.outputColorSpace=THREE.SRGBColorSpace;
+  if(!THREEm){try{const T=await import('three');const {OrbitControls}=await import('three/addons/controls/OrbitControls.js');THREEm={T,OrbitControls}}
+    catch(e){$('#v3msg').hidden=false;$('#v3msg').textContent='Não foi possível carregar o 3D neste navegador.';return}}
+  if(VISTA!=='3d'||FKEY!==key||V3)return;
+  const THREE=THREEm.T,cv=$('#v3c');
+  const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.outputColorSpace=THREE.SRGBColorSpace;
   const sc=new THREE.Scene();sc.background=new THREE.Color(0x0d1314);
-  const [WM,HM]=dimsM();const nx=Math.min(REL.W,420),ny=Math.max(2,Math.round(nx*REL.H/REL.W));
-  const g=new THREE.PlaneGeometry(WM,HM,nx-1,ny-1);g.rotateX(-Math.PI/2);const P=g.attributes.position;
-  const [w,s,e,n]=REL.bbox;const hs=new Float32Array(nx*ny);
+  const [WM,HM]=dimsM();const [w,s,e,n]=REL.bbox;const nx=Math.min(REL.W,420),ny=Math.max(2,Math.round(nx*REL.H/REL.W));
+  const g=new THREE.PlaneGeometry(WM,HM,nx-1,ny-1);g.rotateX(-Math.PI/2);const P=g.attributes.position;const hs=new Float32Array(nx*ny);
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const lng=w+(e-w)*i/(nx-1),lat=n-(n-s)*j/(ny-1);hs[j*nx+i]=(altEm(Math.min(n,Math.max(s,lat)),Math.min(e,Math.max(w,lng)))??REL.zmin)-REL.zmin}
   const tex=new THREE.CanvasTexture(textura3D($('#v3tx').value));tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=R.capabilities.getMaxAnisotropy();
   const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0}));sc.add(mesh);
-  // saia (laterais do bloco)
   const sk=new THREE.BufferGeometry();const borda=[];for(let i=0;i<nx;i++)borda.push(i);for(let j=1;j<ny;j++)borda.push(j*nx+nx-1);for(let i=nx-2;i>=0;i--)borda.push((ny-1)*nx+i);for(let j=ny-2;j>=0;j--)borda.push(j*nx);
   const skP=new Float32Array(borda.length*6);sk.setAttribute('position',new THREE.BufferAttribute(skP,3));
   const idx=[];for(let k=0;k<borda.length-1;k++){const a=2*k,b=2*k+1,c=2*k+2,d=2*k+3;idx.push(a,c,b,b,c,d)}sk.setIndex(idx);
-  const skirt=new THREE.Mesh(sk,new THREE.MeshStandardMaterial({color:0x5b4632,roughness:1,side:THREE.DoubleSide}));sc.add(skirt);
+  sc.add(new THREE.Mesh(sk,new THREE.MeshStandardMaterial({color:0x5b4632,roughness:1,side:THREE.DoubleSide})));
   const base=Math.max(20,(REL.zmax-REL.zmin)*0.25);
+  // caminho: linha amarela sobre o terreno + marcador do perfil
+  const pathLine=new THREE.Line(new THREE.BufferGeometry(),new THREE.LineBasicMaterial({color:0xffd400,depthTest:false,transparent:true}));pathLine.renderOrder=10;sc.add(pathLine);
+  const D0=Math.max(WM,HM);
+  const hov=new THREE.Mesh(new THREE.SphereGeometry(D0/260,16,12),new THREE.MeshBasicMaterial({color:0xffffff,depthTest:false}));hov.renderOrder=11;hov.visible=false;sc.add(hov);
+  const toXYZ=(lng,lat,dz=0)=>{const ex=+$('#v3ex').value;return new THREE.Vector3((lng-w)/(e-w)*WM-WM/2,((altEm(lat,lng)??REL.zmin)-REL.zmin)*ex+dz,(n-lat)/(n-s)*HM-HM/2)};
   function setEx(ex){for(let k=0;k<hs.length;k++)P.setY(k,hs[k]*ex);P.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();
-    borda.forEach((v,k)=>{skP.set([P.getX(v),P.getY(v),P.getZ(v),P.getX(v),-base*ex,P.getZ(v)],k*6)});sk.attributes.position.needsUpdate=true;sk.computeVertexNormals();sk.computeBoundingSphere()}
-  setEx(+$('#v3ex').value);
-  sc.add(new THREE.HemisphereLight(0xffffff,0x3a4a3c,1.05));const sun=new THREE.DirectionalLight(0xfff4e0,1.7);sun.position.set(-0.7,1,-0.7).multiplyScalar(Math.max(WM,HM));sc.add(sun);
-  const cam=new THREE.PerspectiveCamera(38,1,Math.max(WM,HM)/2000,Math.max(WM,HM)*20);const D0=Math.max(WM,HM);cam.position.set(D0*0.12,D0*0.62,D0*1.02);
-  const ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.dampingFactor=0.08;ctl.maxPolarAngle=Math.PI*0.48;ctl.minDistance=D0*0.03;ctl.maxDistance=D0*3;ctl.target.set(0,(REL.zmax-REL.zmin)*0.3,0);
+    borda.forEach((v,k)=>{skP.set([P.getX(v),P.getY(v),P.getZ(v),P.getX(v),-base*ex,P.getZ(v)],k*6)});sk.attributes.position.needsUpdate=true;sk.computeVertexNormals();sk.computeBoundingSphere();desenhaCaminho()}
+  function desenhaCaminho(){
+    const pts=[];const ex=+$('#v3ex').value;
+    if(PERFIL)for(const q of PERFIL.amostras)pts.push(toXYZ(q.lng,q.lat,1.5*ex));
+    else if(PATH.length===1)pts.push(toXYZ(PATH[0].lng,PATH[0].lat,1.5*ex));
+    pathLine.geometry.dispose();pathLine.geometry=new THREE.BufferGeometry().setFromPoints(pts);
+    V3&&(V3.pins=PATH.map(p=>toXYZ(p.lng,p.lat,2*ex)));
+  }
+  sc.add(new THREE.HemisphereLight(0xffffff,0x3a4a3c,1.05));const sun=new THREE.DirectionalLight(0xfff4e0,1.7);sun.position.set(-0.7,1,-0.7).multiplyScalar(D0);sc.add(sun);
+  const cam=new THREE.PerspectiveCamera(38,1,D0/2000,D0*20);cam.position.set(D0*0.12,D0*0.62,D0*1.02);
+  const ctl=new THREEm.OrbitControls(cam,cv);ctl.enableDamping=true;ctl.dampingFactor=0.08;ctl.maxPolarAngle=Math.PI*0.48;ctl.minDistance=D0*0.02;ctl.maxDistance=D0*3;ctl.target.set(0,(REL.zmax-REL.zmin)*0.3,0);
   function tam(){const r=cv.parentElement.getBoundingClientRect();R.setSize(r.width,r.height,false);cam.aspect=r.width/Math.max(1,r.height);cam.updateProjectionMatrix()}
   const ro=new ResizeObserver(tam);ro.observe(cv.parentElement);tam();
   const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
-  cv.onpointermove=ev=>{const r=cv.getBoundingClientRect();mv.set((ev.clientX-r.left)/r.width*2-1,-(ev.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
-    const hit=ray.intersectObject(mesh)[0];const el=$('#v3alt');if(!hit){el.hidden=true;return}
-    const lng=w+(hit.point.x+WM/2)/WM*(e-w),lat=n-(hit.point.z+HM/2)/HM*(n-s);const a=altEm(lat,lng);
-    let pasto='';if(GJ){const pt=[lng,lat];for(const f of GJ.features)if(dentro(pt,f.geometry)){pasto=` · ${f.properties.retiro} ${f.properties.nome}`;break}}
-    el.hidden=a==null;el.textContent=`altitude ${fmt(a,0)} m${pasto}`};
+  const pega=ev=>{const r=cv.getBoundingClientRect();mv.set((ev.clientX-r.left)/r.width*2-1,-(ev.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
+    const hit=ray.intersectObject(mesh)[0];if(!hit)return null;return {lng:w+(hit.point.x+WM/2)/WM*(e-w),lat:n-(hit.point.z+HM/2)/HM*(n-s)}};
+  cv.onpointermove=ev=>{const q=pega(ev);const el=$('#v3alt');if(!q){el.hidden=true;return}const a=altEm(q.lat,q.lng);const pp=pastoEm(q.lng,q.lat);
+    el.hidden=a==null;el.textContent=`altitude ${fmt(a,0)} m${pp?` · ${pp.retiro} ${pp.nome}`:''} · clique para marcar ponto`};
   cv.onpointerleave=()=>$('#v3alt').hidden=true;
-  let raf=0;const loop=()=>{raf=requestAnimationFrame(loop);ctl.update();R.render(sc,cam)};loop();
-  V3={R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>cancelAnimationFrame(raf),setEx,THREE};
-  legenda3D();
+  let down=null;cv.addEventListener('pointerdown',ev=>{down={x:ev.clientX,y:ev.clientY,b:ev.button,t:performance.now()}});
+  cv.addEventListener('pointerup',ev=>{if(!down||down.b!==0)return;const d=Math.hypot(ev.clientX-down.x,ev.clientY-down.y);const dt=performance.now()-down.t;down=null;
+    if(d>5||dt>600)return;const q=pega(ev);if(!q)return;const inf=pontoInfo(q.lat,q.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()});
+  const vec=new THREE.Vector3();
+  let raf=0;const loop=()=>{raf=requestAnimationFrame(loop);ctl.update();R.render(sc,cam);
+    const lb=$('#v3lbl');const r=cv.getBoundingClientRect();let h='';
+    (V3?.pins||[]).forEach((p,i)=>{vec.copy(p).project(cam);if(vec.z>1)return;const x=(vec.x+1)/2*r.width,y=(1-vec.y)/2*r.height;const q=PATH[i];const last=i===PATH.length-1;
+      h+=`<div class="pin${last?' last':''}" style="left:${x}px;top:${y}px"><b>${i+1}</b>${last?` ${fmt(q.z,0)} m · ${fmt(q.graus,1)}° (${fmt(q.pct,1)}%)${q.face!=='plano'?' · cai para '+q.face:''}`:''}</div>`});
+    if(lb.innerHTML!==h)lb.innerHTML=h};loop();
+  V3={key,R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>cancelAnimationFrame(raf),setEx,desenhaCaminho,hov,toXYZ,THREE,pins:[]};
+  setEx(+$('#v3ex').value);legenda3D();
 }
-function dentro([x,y],g){const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
-  for(const p of polys){let ins=false;for(const ring of p)for(let i=0,j=ring.length-1;i<ring.length;j=i++){const [xi,yi]=ring[i],[xj,yj]=ring[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}if(ins)return true}return false}
 function legenda3D(){
-  const modo=$('#v3tx').value;const rg=REL.zmax-REL.zmin;
+  if(!REL)return;const modo=$('#v3tx').value;const rg=REL.zmax-REL.zmin;
   $('#v3info').textContent=`${REL.fonte} (${REL.resolucao_m} m) · altitude ${fmt(REL.zmin,0)}–${fmt(REL.zmax,0)} m · curvas a cada ${REL.equidistancia} m`+(modo==='ndvi'&&RAST?` · NDVI de ${fdate(RAST.data)}`:'');
   if(modo==='ndvi'&&RAST){$('#v3leg').innerHTML=`NDVI ${fdate(RAST.data)} (${$('#esc').value==='fixa'?'escala fixa':'máximo contraste'})<div class="bar" style="background:${$('#bar').style.background}"></div><div class="ticks">${$('#ticks').innerHTML}</div>`}
   else{$('#v3leg').innerHTML=`Altitude (m)<div class="bar" style="background:linear-gradient(90deg,${HIPSO.map(([t,c])=>`rgb(${c}) ${t*100}%`).join(',')})"></div><div class="ticks">${[0,.25,.5,.75,1].map(t=>`<span>${fmt(REL.zmin+rg*t,0)}</span>`).join('')}</div>`}
 }
-function retex3D(){if(!V3)return;const T=V3.THREE;const t=new T.CanvasTexture(textura3D($('#v3tx').value));t.colorSpace=T.SRGBColorSpace;t.anisotropy=V3.R.capabilities.getMaxAnisotropy();
+function retex3D(){if(!V3||V3.key!==FKEY||!REL)return;const T=V3.THREE;$('#v3tx').querySelector('[value=ndvi]').disabled=!RAST;
+  const t=new T.CanvasTexture(textura3D($('#v3tx').value));t.colorSpace=T.SRGBColorSpace;t.anisotropy=V3.R.capabilities.getMaxAnisotropy();
   V3.mesh.material.map.dispose();V3.mesh.material.map=t;V3.mesh.material.needsUpdate=true;legenda3D()}
-function fechar3D(){if(V3){V3.stop();V3.ro.disconnect();V3.ctl.dispose();V3.g.dispose();V3.sk.dispose();V3.mesh.material.map.dispose();V3.R.dispose();V3=null}$('#v3d').hidden=true}
-$('#b3d').onclick=abrir3D;$('#v3x').onclick=fechar3D;
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#v3d').hidden)fechar3D()});
+
+/* ---- caminho e perfil do terreno ---- */
+function atualizaCaminho(){
+  PERFIL=null;
+  if(PATH.length>=2){const am=[];let dist=0;
+    for(let k=0;k<PATH.length-1;k++){const a=PATH[k],b=PATH[k+1];const [mx,my]=mPorGrau((a.lat+b.lat)/2);const L0=Math.hypot((b.lng-a.lng)*mx,(b.lat-a.lat)*my);
+      const nseg=Math.max(1,Math.ceil(L0/10));for(let i=(k?1:0);i<=nseg;i++){const t=i/nseg;const lng=a.lng+(b.lng-a.lng)*t,lat=a.lat+(b.lat-a.lat)*t;
+        am.push({lng,lat,d:dist+L0*t,z:altEm(lat,lng),v:i===0?k:(i===nseg?k+1:null)})}dist+=L0}
+    let sobe=0,desce=0,dmax=0;for(let i=1;i<am.length;i++){const dz=am[i].z-am[i-1].z;if(dz>0)sobe+=dz;else desce-=dz}
+    for(let i=0;i<am.length;i++){let j=i;while(j<am.length-1&&am[j].d-am[i].d<30)j++;if(am[j].d-am[i].d>=20){const s=Math.abs(am[j].z-am[i].z)/(am[j].d-am[i].d);if(s>dmax){dmax=s}}}
+    const zs=am.map(q=>q.z);PERFIL={amostras:am,dist,sobe,desce,dmax,zmin:Math.min(...zs),zmax:Math.max(...zs)}}
+  if(V3)V3.desenhaCaminho();desenhaPerfil();
+}
+function desenhaPerfil(){
+  const el=$('#pfbody');
+  if(!PATH.length){el.innerHTML='<div class="muted">Clique no terreno em 3D para marcar pontos. Cada clique mostra a altitude e o declive do ponto; com dois ou mais pontos aparece aqui o perfil do caminho.</div>';$('#pfinfo').textContent='';return}
+  const pts=`<table style="margin-top:8px"><thead><tr><th>#</th><th>Pasto</th><th>Distância</th><th>Altitude</th><th>Declive</th><th>Cai para</th></tr></thead><tbody>${PATH.map((q,i)=>{
+      const am=PERFIL?.amostras.find(a=>a.v===i);const pp=pastoEm(q.lng,q.lat);
+      return `<tr><td>${i+1}</td><td>${pp?pp.nome:'–'}</td><td>${am?fmtD(am.d):'0 m'}</td><td>${fmt(q.z,1)} m</td><td>${fmt(q.graus,1)}° · ${fmt(q.pct,1)}%</td><td>${q.face}</td></tr>`}).join('')}</tbody></table>`;
+  if(!PERFIL){el.innerHTML=pts;$('#pfinfo').textContent='1 ponto';return}
+  const P=PERFIL,am=P.amostras;const W=400,H=180,L0=34,R0=8,T0=10,B0=22;const lo=Math.floor(P.zmin-1),hi=Math.ceil(P.zmax+1);
+  const X=d=>L0+(W-L0-R0)*d/P.dist,Y=z=>T0+(H-T0-B0)*(1-(z-lo)/(hi-lo));
+  const ystep=niceStep((hi-lo)/4),xstep=niceStep(P.dist/5);let g='';
+  for(let v=Math.ceil(lo/ystep)*ystep;v<=hi;v+=ystep)g+=`<line x1="${L0}" x2="${W-R0}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L0-4}" y="${Y(v)+3}" font-size="9" text-anchor="end" fill="var(--mut)">${fmt(v,0)}</text>`;
+  for(let d=0;d<=P.dist+1e-6;d+=xstep)g+=`<text x="${X(d)}" y="${H-6}" font-size="9" text-anchor="middle" fill="var(--mut)">${fmtD(d)}</text>`;
+  g+=`<polygon fill="var(--acc)" fill-opacity=".18" points="${X(0)},${Y(lo)} ${am.map(q=>X(q.d)+','+Y(q.z)).join(' ')} ${X(P.dist)},${Y(lo)}"/>`;
+  g+=`<polyline fill="none" stroke="var(--acc)" stroke-width="2" points="${am.map(q=>X(q.d)+','+Y(q.z)).join(' ')}"/>`;
+  am.forEach(q=>{if(q.v!=null)g+=`<line x1="${X(q.d)}" x2="${X(q.d)}" y1="${T0}" y2="${H-B0}" stroke="var(--ink)" stroke-opacity=".25" stroke-dasharray="3 3"/><circle cx="${X(q.d)}" cy="${Y(q.z)}" r="3.2" fill="#ffd400" stroke="#000" stroke-width=".8"/><text x="${X(q.d)+3}" y="${T0+8}" font-size="9" fill="var(--ink)">${q.v+1}</text>`});
+  g+=`<line id="pfcur" x1="0" x2="0" y1="${T0}" y2="${H-B0}" stroke="var(--ink)" stroke-opacity=".6" visibility="hidden"/><text id="pfcurt" x="0" y="${T0+18}" font-size="9.5" fill="var(--ink)" visibility="hidden"></text>`;
+  const decl=(P.zmax-P.zmin)/P.dist;const med=(am[am.length-1].z-am[0].z)/P.dist;
+  el.innerHTML=`<svg id="pfsvg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:180px;display:block;cursor:crosshair">${g}</svg>
+    <div class="kpis" style="margin-top:8px"><div class="kpi"><b>${fmtD(P.dist)}</b><span>comprimento do caminho</span></div><div class="kpi"><b>+${fmt(P.sobe,0)} / −${fmt(P.desce,0)} m</b><span>subida / descida acumuladas</span></div><div class="kpi"><b>${fmt(P.dmax*100,1)}%</b><span>declive máximo (${fmt(Math.atan(P.dmax)*180/Math.PI,1)}°) em trecho de 30 m</span></div></div>
+    <div class="muted" style="margin-top:6px">Altitude de ${fmt(P.zmin,0)} a ${fmt(P.zmax,0)} m · do ponto 1 ao ${PATH.length}: ${med>=0?'+':''}${fmt(am[am.length-1].z-am[0].z,1)} m (declive médio ${fmt(med*100,1)}%, ${fmt(Math.atan(Math.abs(med))*180/Math.PI,1)}°)</div>`+pts;
+  $('#pfinfo').textContent=`${PATH.length} pontos`;
+  const svg=$('#pfsvg');
+  svg.onmousemove=ev=>{const r=svg.getBoundingClientRect();const d=((ev.clientX-r.left)/r.width*W-L0)/(W-L0-R0)*P.dist;if(d<0||d>P.dist)return;
+    let q=am[0];for(const a of am){if(a.d>d)break;q=a}
+    const c=$('#pfcur'),t=$('#pfcurt');c.setAttribute('x1',X(q.d));c.setAttribute('x2',X(q.d));c.setAttribute('visibility','visible');
+    t.setAttribute('x',Math.min(X(q.d)+4,W-110));t.textContent=`${fmtD(q.d)} · ${fmt(q.z,1)} m`;t.setAttribute('visibility','visible');
+    if(V3){V3.hov.position.copy(V3.toXYZ(q.lng,q.lat,3*+$('#v3ex').value));V3.hov.visible=true}};
+  svg.onmouseleave=()=>{$('#pfcur').setAttribute('visibility','hidden');$('#pfcurt').setAttribute('visibility','hidden');if(V3)V3.hov.visible=false};
+}
+const fmtD=d=>d>=1000?fmt(d/1000,d>=10000?1:2)+' km':fmt(d,0)+' m';
+function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(Math.max(x,1e-9))));for(const m of [1,2,2.5,5,10])if(m*p>=x)return m*p;return 10*p}
+function exportaPerfil(){if(!PERFIL)return;const L=[['fazenda','ponto','distancia_m','longitude','latitude','altitude_m']];
+  for(const q of PERFIL.amostras)L.push([D.fazenda,q.v!=null?q.v+1:'',csvN(q.d),q.lng.toFixed(6),q.lat.toFixed(6),csvN(q.z)]);csv(`perfil_${FKEY}.csv`,L)}
+
+document.querySelectorAll('#vsw button').forEach(b=>b.onclick=()=>setVista(b.dataset.v));
+$('#v3ex').value=st.get('ndvi_v3ex')||'3';
 $('#v3ex').onchange=()=>{st.set('ndvi_v3ex',$('#v3ex').value);if(V3)V3.setEx(+$('#v3ex').value)};
-['#v3tx','#v3cv','#v3ps','#v3nm'].forEach(s=>$(s).onchange=retex3D);
+['#v3tx','#v3ps','#v3nm'].forEach(s=>$(s).onchange=retex3D);
+const limpaCaminho=()=>{PATH=[];atualizaCaminho()};
+$('#v3undo').onclick=$('#pfundo').onclick=()=>{PATH.pop();atualizaCaminho()};
+$('#v3clr').onclick=$('#pfclr').onclick=limpaCaminho;
+$('#pfcsv').onclick=exportaPerfil;
+desenhaPerfil();
 
 $('#data').onchange=()=>setDate(+$('#data').value);
 $('#prev').onclick=()=>setDate(Math.max(0,+$('#data').value-1));
