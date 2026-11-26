@@ -44,6 +44,7 @@ jobs:
           CONTROLPASTO_URL: ${{ secrets.CONTROLPASTO_URL }}
           SENHA_SITE: ${{ secrets.SENHA_SITE }}
           CP_DEBUG: ${{ github.event.inputs.debug || '1' }}
+          CP_ORCAMENTO_MIN: "20"
         run: python ndvi/controlpasto.py
 
       - name: Diagnóstico (criptografado)
