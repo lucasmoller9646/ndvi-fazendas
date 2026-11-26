@@ -1,0 +1,89 @@
+name: Lotação (ControlPasto)
+
+on:
+  schedule:
+    - cron: "41 2,8,14,20 * * *"   # 4 vezes por dia (23:41, 05:41, 11:41 e 17:41 de Assunção/Brasília)
+  push:
+    branches: [main]
+    paths: ["ndvi/controlpasto.py", ".github/workflows/lotacao.yml"]
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Gravar a resposta crua criptografada (cp_debug) para diagnóstico"
+        required: false
+        default: "0"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: ndvi
+  cancel-in-progress: false
+
+jobs:
+  lotacao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests cryptography
+
+      - name: Ler o ControlPasto
+        env:
+          PYTHONUNBUFFERED: "1"
+          CONTROLPASTO_USUARIO: ${{ secrets.CONTROLPASTO_USUARIO }}
+          CONTROLPASTO_CLAVE: ${{ secrets.CONTROLPASTO_CLAVE }}
+          CONTROLPASTO_URL: ${{ secrets.CONTROLPASTO_URL }}
+          SENHA_SITE: ${{ secrets.SENHA_SITE }}
+          CP_DEBUG: ${{ github.event.inputs.debug || '1' }}
+        run: python ndvi/controlpasto.py
+
+      - name: Diagnóstico (criptografado)
+        if: always() && hashFiles('cp_debug.bin') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: cp_debug
+          path: cp_debug.bin
+          retention-days: 1
+
+      - name: Gravar no main
+        run: |
+          git config user.name "ndvi-bot"
+          git config user.email "ndvi-bot@users.noreply.github.com"
+          if [ -d docs/lotacao ]; then git add docs/lotacao; fi
+          if git diff --cached --quiet; then echo "lotação sem mudança"; else git commit -qm "Lotação ControlPasto $(date -u +%FT%H:%MZ)" && git pull --rebase -X theirs origin main && git push; fi
+
+      - name: Trazer os mapas NDVI e a senha
+        env:
+          SENHA_SITE: ${{ secrets.SENHA_SITE }}
+        run: |
+          if git ls-remote --exit-code origin imagens >/dev/null; then
+            git fetch --depth 1 origin imagens
+            git archive origin/imagens img | tar -x -C docs
+          fi
+          python - <<'PY'
+          import hashlib, json, os
+          s = os.environ.get('SENHA_SITE') or '123321'
+          json.dump({'sha256': hashlib.sha256(('ndvi-fazendas:' + s).encode()).hexdigest()}, open('docs/acesso.json', 'w'))
+          PY
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deploy
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - if: steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - id: deploy2
+        if: steps.deploy.outcome == 'failure'
+        uses: actions/deploy-pages@v4
