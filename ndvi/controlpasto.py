@@ -12,7 +12,10 @@ Saída em docs/lotacao/ (o repositório é público: os dados vão CRIPTOGRAFADO
 chave = PBKDF2-SHA256(senha, 'ndvi-fazendas:lotacao', 150000) — a página decifra com a senha digitada na entrada):
   index.json        só metadados: data da leitura, fazendas com dados, erro se houver
   <fazenda>.json    {v, iv, ct}: lotes de hoje por pasto, série semanal de 12 meses, média de 12 meses e movimentações
-  _cache.json       {v, iv, ct}: fotografias semanais já lidas (cada domingo), para não pedir tudo de novo a cada execução
+  _cache.json       {v, iv, ct}: fotografias semanais já lidas (cada domingo) e operações, para não pedir tudo de novo.
+Cada carga instantânea leva 1 a 2 minutos no servidor (mais quanto mais nova a data), então: hoje é lido sempre e
+primeiro; os domingos que faltam entram aos poucos, até CP_ORCAMENTO_MIN minutos por execução (padrão 35); os domingos
+das 2 últimas semanas são lidos de novo uma vez por dia; as operações, desde a última leitura menos 15 dias.
 
 Teste sem a API: FAKE=1 python ndvi/controlpasto.py   (gera dados de exemplo para todas as fazendas com mapa)
 Diagnóstico: CP_DEBUG=1 imprime a estrutura (só nomes de campos e tipos) e grava cp_debug.bin, a resposta crua
@@ -344,57 +347,75 @@ def fake_snaps(datas):
 # ------------------------------------------------------------------ principal
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    t_ini = time.time(); orc = float(os.environ.get('CP_ORCAMENTO_MIN') or 35) * 60
     agora = dt.datetime.now(dt.timezone(dt.timedelta(hours=-3)))
-    hoje = agora.date(); hoje_s = hoje.isoformat(); datas = [d for d in domingos(hoje) if d != hoje_s] + [hoje_s]
+    hoje = agora.date(); hoje_s = hoje.isoformat()
+    doms = [d for d in domingos(hoje) if d != hoje_s]
     if not FAKE and not (USER and PASS):
         print('Sem CONTROLPASTO_USUARIO / CONTROLPASTO_CLAVE: lotação não atualizada (crie os dois segredos no repositório).')
         return
     k = chave(); idx_p = OUT / 'index.json'
-    cache = {'pv': PARSER_V, 'snaps': {}}
+    cache = {'pv': PARSER_V, 'snaps': {}, 'lido': {}, 'movs': [], 'movs_ate': None}
     cp_ = OUT / '_cache.json'
     if cp_.exists():
         try:
             c = decifrar(json.loads(cp_.read_text()), k)
-            if c.get('pv') == PARSER_V: cache = c
+            if c.get('pv') == PARSER_V: cache.update(c)
         except Exception as e: print('cache ilegível (senha mudou?), lendo tudo de novo:', type(e).__name__)
-    erro = None
+    erro = None; snaps = {}
     if FAKE:
-        snaps, movs = fake_snaps(datas)
+        snaps, movs = fake_snaps(doms + [hoje_s]); cache['snaps'] = {}
     else:
         api = CP(); brutos = {}
+        def carga(d):
+            t = time.time(); res = api.call('ControlPastoService.LstFz_CargaInst', {'Data': d}, 900)
+            rows = lotes_de(res)
+            print(f'carga {d}: {len(rows)} lotes, {sum(r[4] for r in rows):.0f} cab ({time.time()-t:.0f} s)')
+            return res, rows
         try:
             api.login(); print('login ok')
-            snaps = {}
-            limite = (hoje - dt.timedelta(days=REFAZ_DIAS)).isoformat()
-            for d in datas:
-                if d in cache['snaps'] and d < limite and d != hoje_s: snaps[d] = cache['snaps'][d]; continue
-                t = time.time(); res = api.call('ControlPastoService.LstFz_CargaInst', {'Data': d})
-                if d == hoje_s:
-                    brutos['carga_hoje'] = res
-                    print('\n'.join(esquema(res, 'LstFz_CargaInst')[:160]))
-                snaps[d] = lotes_de(res)
-                print(f'carga {d}: {len(snaps[d])} lotes, {sum(r[4] for r in snaps[d]):.0f} cab ({time.time()-t:.1f} s)')
-                time.sleep(0.5)
-            d0 = (hoje - dt.timedelta(days=380)).isoformat(); res = None
+            # 1) hoje, sempre e primeiro
+            res, snaps[hoje_s] = carga(hoje_s); brutos['carga_hoje'] = res
+            print('\n'.join(esquema(res, 'LstFz_CargaInst')[:160]))
+            # 2) operações: 380 dias na primeira vez; depois, desde a última leitura menos 15 dias
+            ini = (hoje - dt.timedelta(days=380)).isoformat()
+            if cache.get('movs_ate'): ini = max(ini, (dt.date.fromisoformat(cache['movs_ate']) - dt.timedelta(days=15)).isoformat())
+            t = time.time(); novos = []; res = None; a = dt.date.fromisoformat(ini)
             try:
-                res = api.call('ControlPastoService.LstFz_HistLote', {'DataIni': d0, 'DataFim': hoje_s}, 600)
-                movs = movs_de(res)
-            except Exception as e:  # período grande demais: em trimestres
-                print('histórico em um pedido falhou:', e); movs = []; a = hoje - dt.timedelta(days=380)
-                while a < hoje:
-                    b = min(hoje, a + dt.timedelta(days=92))
-                    r2 = api.call('ControlPastoService.LstFz_HistLote', {'DataIni': a.isoformat(), 'DataFim': b.isoformat()}, 600)
-                    res = res or r2; movs += movs_de(r2); a = b + dt.timedelta(days=1); time.sleep(0.5)
-                movs.sort(key=lambda r: r[0])
+                while a <= hoje:
+                    b = min(hoje, a + dt.timedelta(days=120))
+                    r2 = api.call('ControlPastoService.LstFz_HistLote', {'DataIni': a.isoformat(), 'DataFim': b.isoformat()}, 900)
+                    res = res or r2; novos += movs_de(r2); a = b + dt.timedelta(days=1)
+                cache['movs'] = [m for m in cache.get('movs', []) if m[0] < ini] + novos
+                cache['movs'] = [m for m in cache['movs'] if m[0] >= (hoje - dt.timedelta(days=380)).isoformat()]
+                cache['movs'].sort(key=lambda r: r[0]); cache['movs_ate'] = hoje_s
+                print(f'operações desde {ini}: {len(novos)} ({time.time()-t:.0f} s); guardadas: {len(cache["movs"])}')
+            except Exception as e:
+                print('operações não lidas nesta execução:', e)
             brutos['hist'] = res
-            print('\n'.join(esquema(res, 'LstFz_HistLote')[:120]))
-            print(f'movimentações: {len(movs)}')
-            if DEBUG or not snaps.get(hoje_s): grava_debug(brutos)
+            if res is not None: print('\n'.join(esquema(res, 'LstFz_HistLote')[:120]))
+            if DEBUG: grava_debug(brutos)
+            # 3) domingos: faltantes (do mais novo para o mais velho) e os de 2 semanas para cá uma vez por dia
+            rel = (hoje - dt.timedelta(days=14)).isoformat()
+            fila = [d for d in reversed(doms) if d not in cache['snaps'] or (d >= rel and cache['lido'].get(d, '') < hoje_s)]
+            print(f'domingos a ler: {len(fila)} de {len(doms)}')
+            for d in fila:
+                if time.time() - t_ini > orc: print(f'orçamento de tempo esgotado: faltam {len(fila) - fila.index(d)} domingos para as próximas execuções'); break
+                try: _, cache['snaps'][d] = carga(d); cache['lido'][d] = hoje_s
+                except Exception as e: print(f'carga {d} falhou: {e}'); break
         finally:
             api.logout()
         if not snaps.get(hoje_s):
-            erro = 'a carga de hoje veio sem lotes reconhecidos'
-            print('AVISO:', erro)
+            erro = 'a carga de hoje veio sem lotes reconhecidos'; print('AVISO:', erro)
+        cache['snaps'] = {d: v for d, v in cache['snaps'].items() if d in doms}
+        cache['lido'] = {d: v for d, v in cache['lido'].items() if d in doms}
+        snaps.update(cache['snaps']); movs = cache['movs']
+    datas = sorted(d for d in snaps if d != hoje_s) + [hoje_s]
+    if not FAKE and not erro:
+        cp_.write_text(json.dumps(cifrar(cache, k), separators=(',', ':')), encoding='utf-8')
+    print(f'fotografias na série: {len(datas)} (tempo total {time.time()-t_ini:.0f} s)')
+    if erro and idx_p.exists():
+        print('mantidos os dados da última leitura boa'); return
     faz_cp = sorted({r[0] for r in snaps.get(hoje_s, [])})
     print('fazendas no ControlPasto:', ', '.join(f'{f} -> {site_key(f) or "(sem mapa no site)"}' for f in faz_cp))
     feitas = []
@@ -405,9 +426,6 @@ def main():
         print(f'{key}: {D["total"]["cab"]} cab, {D["total"]["ua"]} UA, {cas} pastos ocupados, {sm} lotes sem pasto no mapa, {len(D["movs"])} pastos com movimentações')
         for fz, pa, pq, ls in D['sem_mapa'][:15]: print(f'   sem mapa: {fz} / {pa} / {pq}')
         (OUT / f'{key}.json').write_text(json.dumps(cifrar(D, k), separators=(',', ':')), encoding='utf-8'); feitas.append(key)
-    if not FAKE and not erro:
-        cache['snaps'] = {d: v for d, v in snaps.items() if d != hoje_s}
-        cp_.write_text(json.dumps(cifrar(cache, k), separators=(',', ':')), encoding='utf-8')
     idx = {'atualizado': agora.isoformat(timespec='minutes'), 'fazendas': feitas, 'fonte': 'ControlPasto (Integrasoftware)' + (' — EXEMPLO' if FAKE else ''),
            'cifra': 'AES-256-GCM; chave PBKDF2-SHA256(senha do site, "ndvi-fazendas:lotacao", 150000)'}
     if erro: idx['erro'] = erro

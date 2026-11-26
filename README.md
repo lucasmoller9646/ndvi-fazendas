@@ -75,6 +75,40 @@ terreno cai); com dois ou mais pontos o painel lateral mostra o perfil do caminh
 acumuladas, declive máximo em trechos de 30 m e declive médio), que pode ser exportado em CSV. O DEM de 30 m mede a superfície (inclui a altura das
 matas), com erro vertical típico de 2 a 4 m: serve para planejar e orientar, não substitui levantamento topográfico.
 
+## Lotação dos pastos (ControlPasto)
+
+No seletor **Mostrar** da página, além do NDVI, há **Lotação hoje** e **Lotação média 12 meses**: cada pasto é pintado
+pela carga em UA/ha (UA = 450 kg de peso vivo), num mapa de calor que vai do amarelo-claro (baixa) ao vermelho-escuro
+(3 UA/ha ou mais). Azul é pasto descansando, sem animais. A tabela lateral passa a mostrar os lotes, as cabeças e as
+duas lotações de cada pasto.
+
+Clicando num pasto (no mapa ou na tabela), o cartão **ControlPasto** mostra os lotes que estão nele hoje (cabeças,
+categoria, peso médio e UA), a lotação semana a semana dos últimos 12 meses com a média e as movimentações do período
+(entradas, mudanças de piquete, transferências, saídas e mortes), que também aparecem como marcas ▲ no gráfico.
+Sem pasto escolhido, o cartão mostra o total da fazenda e as últimas movimentações. O menu Exportar tem a lotação e as
+movimentações em CSV.
+
+**De onde vêm os dados.** O workflow **Lotação (ControlPasto)** (`.github/workflows/lotacao.yml`) roda 4 vezes por dia
+e lê a API JSON-RPC do ControlPasto (`ndvi/controlpasto.py`):
+
+- `LstFz_CargaInst` (carga instantânea) para hoje e para cada domingo dos últimos 12 meses. A média de 12 meses é a
+  média dessas 52 fotografias semanais. Os domingos já lidos ficam guardados em `docs/lotacao/_cache.json`; a cada
+  execução só são lidos de novo hoje e as últimas 5 semanas (por causa de lançamentos com data retroativa).
+- `LstFz_HistLote` (operações dos lotes) para os últimos 380 dias.
+
+O piquete do ControlPasto é casado com o pasto do mapa pelo nome (sem espaços, hífens nem zeros à esquerda; em Lusipar,
+também pela fazenda Lusipar / Lusipar 1 / Lusipar 2). Um piquete dividido em partes no mapa (por exemplo `E13-norte` e
+`E13-sul`) é repartido pela área. O que não casar aparece no cartão da fazenda como "piquetes sem pasto no mapa": a
+correção é ajustar o nome no GeoJSON do pasto.
+
+**Segredos necessários:** `CONTROLPASTO_USUARIO` e `CONTROLPASTO_CLAVE` (o login do ControlPasto que é dono dos bancos de
+dados; hoje, o do Joaquim). Opcional: `CONTROLPASTO_URL`, se o endereço da API mudar.
+
+**Privacidade.** Como o repositório é público, os arquivos de `docs/lotacao/` são gravados **criptografados**
+(AES-256-GCM, chave derivada da senha do site com PBKDF2-SHA256). A página decifra com a senha digitada na entrada.
+Com uma senha de 6 dígitos isto impede a leitura casual dos arquivos, mas não resiste a quem tentar todas as senhas com
+um computador potente. Ao trocar a `SENHA_SITE`, rode o workflow de lotação para regravar os arquivos com a chave nova.
+
 ## Senha da página
 
 A página pede uma senha de 6 dígitos antes de mostrar os mapas. A senha padrão é **123321**. Para trocar, crie (ou edite)
@@ -101,6 +135,8 @@ Em **Settings → Secrets and variables → Actions → New repository secret**:
 
 - `CDSE_CLIENT_ID` — Client ID criado em https://shapps.dataspace.copernicus.eu/dashboard (User settings → OAuth clients)
 - `CDSE_CLIENT_SECRET` — o Client secret correspondente
+- `CONTROLPASTO_USUARIO` e `CONTROLPASTO_CLAVE` — login da API do ControlPasto (veja "Lotação dos pastos")
+- `SENHA_SITE` — senha de 6 dígitos da página (também cifra os dados de lotação)
 
 Cota gratuita do Copernicus: 10.000 unidades de processamento por mês. Cada passagem de La Esperanza consome
 cerca de 10 unidades, então o histórico inicial (~1 ano) e o uso diário ficam muito abaixo do limite.

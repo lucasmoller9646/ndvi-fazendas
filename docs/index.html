@@ -90,6 +90,16 @@ body.locked header,body.locked main{visibility:hidden}
 #v3leg .ticks{color:#cfd8d6}
 #v3info{position:absolute;left:10px;bottom:10px;color:#cfd8d6;font-size:11px;text-shadow:0 0 3px #000;max-width:45%}
 @media (max-width:700px){#v3tip,#v3info{display:none}}
+/* lotação (ControlPasto) */
+#cam:disabled{opacity:.55}
+.lotes td,.lotes th{font-size:12.5px}
+.movs{max-height:280px;overflow:auto;margin-top:6px}
+.movs td{font-size:12px}.movs tr{cursor:default}
+.op{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+#cpcard h3{font-size:14px;margin:0}
+#cpcard .kpis{margin:8px 0}
+#cpcard .chart svg{height:150px}
+.aviso{background:color-mix(in srgb,#e0a100 14%,transparent);border-radius:7px;padding:6px 9px;font-size:12.5px;margin-top:8px}
 </style>
 </head>
 <body class="locked">
@@ -107,6 +117,7 @@ body.locked header,body.locked main{visibility:hidden}
   <div><h1 id="titulo">NDVI</h1><div class="sub" id="sub">carregando…</div></div>
   <div class="ctl">
     <label class="muted" for="faz">Fazenda</label><select id="faz"></select>
+    <label class="muted" for="cam">Mostrar</label><select id="cam"><option value="ndvi">NDVI</option><option value="hoje">Lotação hoje (ControlPasto)</option><option value="m12">Lotação média 12 meses</option></select>
     <label class="muted" for="data">Imagem</label>
     <button id="prev" aria-label="Imagem anterior">‹</button><select id="data"></select><button id="next" aria-label="Próxima imagem">›</button>
     <label class="muted" for="ret">Retiro</label><select id="ret"><option value="">Todos</option></select>
@@ -123,6 +134,8 @@ body.locked header,body.locked main{visibility:hidden}
       <button data-x="csv">Tabela dos pastos — esta imagem (CSV)</button>
       <button data-x="serie">Série histórica de todos os pastos (CSV)</button>
       <button data-x="obras" id="xobras" hidden>Avanço das áreas de trabalho (CSV)</button>
+      <button data-x="lot" class="xlot" hidden>Lotação dos pastos — ControlPasto (CSV)<small>hoje, média de 12 meses, lotes e série semanal</small></button>
+      <button data-x="lotmov" class="xlot" hidden>Movimentações dos pastos — ControlPasto (CSV)</button>
     </div></details>
   </div>
 </header>
@@ -153,14 +166,15 @@ body.locked header,body.locked main{visibility:hidden}
     </div>
     <div class="card">
       <div class="kpis">
-        <div class="kpi"><b id="k1">–</b><span>NDVI médio dos pastos</span></div>
-        <div class="kpi"><b id="k2">–</b><span>variação vs. imagem anterior</span></div>
-        <div class="kpi"><b id="k3">–</b><span>área sem nuvem</span></div>
+        <div class="kpi"><b id="k1">–</b><span id="k1l">NDVI médio dos pastos</span></div>
+        <div class="kpi"><b id="k2">–</b><span id="k2l">variação vs. imagem anterior</span></div>
+        <div class="kpi"><b id="k3">–</b><span id="k3l">área sem nuvem</span></div>
       </div>
-      <div class="leg" style="margin-top:10px"><span>NDVI baixo</span><div class="bar" id="bar"></div><span>NDVI alto</span></div>
+      <div class="leg" style="margin-top:10px"><span id="legA">NDVI baixo</span><div class="bar" id="bar"></div><span id="legB">NDVI alto</span></div>
       <div class="ticks" id="ticks"></div>
       <div class="muted" id="escnota" style="margin-top:3px"></div>
     </div>
+    <div class="card" id="cpcard" hidden></div>
     <div class="card" id="obcard" hidden>
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>Avanço das áreas de trabalho</b><span class="muted" id="obinfo"></span></div>
       <div class="chart" id="obchart"></div>
@@ -173,8 +187,8 @@ body.locked header,body.locked main{visibility:hidden}
       <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · ● Sentinel-2 · ○ Landsat · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
     </div>
     <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline"><b>Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
-      <div class="tw"><table><thead><tr><th data-k="nome">Pasto</th><th data-k="retiro">Retiro</th><th data-k="ha">ha</th><th data-k="v">NDVI</th><th data-k="d">Δ</th><th data-k="dt">medido em</th></tr></thead><tbody id="tb"></tbody></table></div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><b id="tbtit">Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
+      <div class="tw"><table><thead id="thd"><tr><th data-k="nome">Pasto</th><th data-k="retiro">Retiro</th><th data-k="ha">ha</th><th data-k="v">NDVI</th><th data-k="d">Δ</th><th data-k="dt">medido em</th></tr></thead><tbody id="tb"></tbody></table></div>
     </div>
     <div class="muted">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
   </div>
@@ -190,15 +204,19 @@ const st={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k
 const SAL='ndvi-fazendas:';
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(SAL+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 let HASH=null;
+/* chave dos dados de lotação (criptografados no repositório público): PBKDF2 da senha, guardada como a própria senha */
+async function derivaChave(pin){const te=new TextEncoder();const b=await crypto.subtle.importKey('raw',te.encode(pin),'PBKDF2',false,['deriveBits']);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:te.encode('ndvi-fazendas:lotacao'),iterations:150000,hash:'SHA-256'},b,256);return btoa(String.fromCharCode(...new Uint8Array(bits)))}
+function chaveLot(){let k=null;try{k=sessionStorage.getItem('ndvi_k')}catch(e){}return k||st.get('ndvi_k')}
 async function gate(){
   try{HASH=(await (await fetch('acesso.json',{cache:'no-store'})).json()).sha256}catch(e){HASH=await sha('123321')}
-  if(st.get('ndvi_ok')===HASH||sessionStorage.getItem('ndvi_ok')===HASH){abrir();return}
+  if((st.get('ndvi_ok')===HASH||sessionStorage.getItem('ndvi_ok')===HASH)&&chaveLot()){abrir();return}
   $('#pin').focus();
 }
 $('#pin').addEventListener('input',e=>{e.target.value=e.target.value.replace(/\D/g,'').slice(0,6);$('#gerr').textContent='';if(e.target.value.length===6)$('#gform').requestSubmit()});
 $('#gform').onsubmit=async e=>{e.preventDefault();const v=$('#pin').value;
   if(v.length!==6){$('#gerr').textContent='A senha tem 6 dígitos.';return}
-  if(await sha(v)===HASH){if($('#lemb').checked)st.set('ndvi_ok',HASH);try{sessionStorage.setItem('ndvi_ok',HASH)}catch(e){}abrir()}
+  if(await sha(v)===HASH){const kk=await derivaChave(v);if($('#lemb').checked){st.set('ndvi_ok',HASH);st.set('ndvi_k',kk)}try{sessionStorage.setItem('ndvi_ok',HASH);sessionStorage.setItem('ndvi_k',kk)}catch(e){}abrir()}
   else{$('#gerr').textContent='Senha incorreta.';$('#pin').value='';$('#pin').focus()}};
 let aberto=false;
 function abrir(){if(aberto)return;aberto=true;$('#gate').remove();document.body.classList.remove('locked');map.invalidateSize();init()}
@@ -258,6 +276,7 @@ async function loadFarm(k){
   $('#upd').textContent=`Última passagem consultada: ${ult?fdate(ult.data):'–'}; página gerada em ${D.atualizado?.replace('T',' ').replace('Z',' UTC')}.`;
   await setDate(passImgs.length-1);
   loadRelevo(k);
+  loadLot(k);
 }
 /* pastos e áreas de trabalho não aparecem juntos */
 function camadas(){const ob=OBJ&&$('#obr').checked;
@@ -267,9 +286,9 @@ function seriesAt(id,dateStr){const s=D.serie[id];if(!s)return null;let best=nul
 function prevOf(id,dateStr){const s=D.serie[id];if(!s)return null;let p=null;for(const r of s){if(r[0]<dateStr)p=r;else break}return p}
 function cur(){return passImgs[+$('#data').value]}
 function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,sat:r?r[5]:null,p10:r?r[2]:null,p90:r?r[3]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
-function styleF(f){const r=rowFor(f);const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
+function styleF(f){if(lotOn())return styleLot(f);const r=rowFor(f);const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
   return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:$('#opac').checked?0:(hide?0:0.85),fillColor:col(r.v)}}
-function tip(p){const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
+function tip(p){if(lotOn())return tipLot(p);const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
 
 /* ---------------- raster: lê o PNG de 8 bits e colore no navegador ---------------- */
 function loadImg(src){return new Promise((ok,err)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=err;im.src=src})}
@@ -305,7 +324,7 @@ function pintar(){
   for(let i=0,j=0;i<q.length;i++,j+=4){const v=q[i];if(!v){o[j+3]=0;continue}const c=map8[v]*3;o[j]=LUT[c];o[j+1]=LUT[c+1];o[j+2]=LUT[c+2];o[j+3]=255}
   cx.putImageData(out,0,0);RAST.canvas=cv;RAST.key=FKEY;
   const [w,s,e,n]=D.bbox;
-  if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:$('#opac').checked?0.92:0,interactive:false}).addTo(map);
+  if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:($('#opac').checked&&!lotOn())?0.92:0,interactive:false}).addTo(map);
   const nt=PALS[PAL].classes?8:5;const t=[...Array(nt).keys()].map(i=>fmt(LO+(HI-LO)*i/(nt-1)));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
   retex3D();
 }
@@ -321,6 +340,7 @@ async function setDate(i){
 }
 function refresh(){
   if(!layer||!GJ||!D)return;
+  painel();if(lotOn()){refreshLot();return}
   const rows=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).map(rowFor);
   const ok=rows.filter(r=>r.v!=null&&r.atual);const ha=ok.reduce((a,r)=>a+r.ha,0);
   const m=ha?ok.reduce((a,r)=>a+r.v*r.ha,0)/ha:null;const dd=ok.filter(r=>r.d!=null);const hd=dd.reduce((a,r)=>a+r.ha,0);
@@ -334,7 +354,7 @@ function refresh(){
   labels.clearLayers();
   const obOn=OBJ&&$('#obr').checked;
   if(!obOn&&map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(r.nome))}
-  drawChart();drawObras();
+  drawChart();drawObras();drawCP();
 }
 
 /* ---------------- áreas de trabalho ---------------- */
@@ -437,6 +457,7 @@ const csvN=v=>v==null||isNaN(v)?'':String(Math.round(v*1000)/1000).replace('.','
 function csv(nome,linhas){baixar(nome,new Blob(['﻿'+linhas.map(r=>r.map(x=>{x=x==null?'':String(x);return /[;"\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x}).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}))}
 async function exportar(tipo){
   const p=cur();$('#exp').open=false;
+  if(tipo==='lot'||tipo==='lotmov'){exportaLot(tipo);return}
   if((tipo==='tif'||tipo==='kmz'||tipo==='png')&&!RAST){alert('Sem imagem carregada.');return}
   const [w,s,e,n]=D.bbox;
   if(tipo==='tif'){const {q,W,H}=RAST;const v=new Float32Array(W*H);for(let i=0;i<v.length;i++)v[i]=q[i]?Math.round(q2v(q[i])*10000)/10000:-9999;
@@ -688,10 +709,122 @@ $('#pal').onchange=()=>{PAL=$('#pal').value;st.set('ndvi_pal',PAL);montaLUT();if
 $('#esc').onchange=()=>{st.set('ndvi_esc',$('#esc').value);escala();if(RAST)pintar();refresh()};
 $('#obr').onchange=()=>{camadas();refresh()};
 $('#obtb').onclick=e=>{const tr=e.target.closest('tr');if(!tr||!D.obras.areas.includes(tr.dataset.a))return;obOpen[tr.dataset.a]=!obOpen[tr.dataset.a];drawObras()};
-$('#opac').onchange=()=>{if(img)img.setOpacity($('#opac').checked?0.92:0);refresh()};
+$('#opac').onchange=()=>{if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);refresh()};
 $('#tb').onclick=e=>{const tr=e.target.closest('tr');if(tr)pick(tr.dataset.id)};
-document.querySelectorAll('th[data-k]').forEach(th=>th.onclick=()=>{const k=th.dataset.k;sortA=sortK===k?!sortA:(k==='nome'||k==='retiro');sortK=k;refresh()});
+$('#thd').onclick=e=>{const th=e.target.closest('th[data-k]');if(!th)return;const k=th.dataset.k;sortA=sortK===k?!sortA:(k==='nome'||k==='retiro'||k==='lotes');sortK=k;refresh()};
 map.on('zoomend',refresh);
+/* ---------------- lotação dos pastos (ControlPasto) ----------------
+   docs/lotacao/<fazenda>.json vem criptografado (AES-GCM) com a chave derivada da senha do site.
+   Conteúdo: pastos{id:{cp,lotes[[lote,cab,pv,ua,cat]],cab,ua,lot,m12,s[[cab,ua] por data]}}, datas[], total{}, movs{id:[[data,op,lote,cab,peso,outro,obs]]}, sem_mapa[] */
+let LOT=null,LOTIDX=null,LOTERR='';let CAM=st.get('ndvi_cam')||'ndvi';
+const LOTMAX=3;
+const LRAMP=[[255,255,204],[255,237,160],[254,217,118],[254,178,76],[253,141,60],[240,59,32],[189,0,38],[128,0,38]];
+function lotOn(){return CAM!=='ndvi'&&!!LOT}
+function lotCol(v){if(v==null||isNaN(v))return '#8a8f8f';if(v<=0.005)return '#3d73c4';
+  const t=Math.min(1,v/LOTMAX)*(LRAMP.length-1),k=Math.min(LRAMP.length-2,Math.floor(t)),f=t-k;return 'rgb('+LRAMP[k].map((c,j)=>Math.round(c+(LRAMP[k+1][j]-c)*f)).join(',')+')'}
+function lotDe(id){return LOT?.pastos?.[id]||null}
+function lotVal(id){const e=lotDe(id);if(!e)return null;return CAM==='m12'?e.m12:e.lot}
+function b64u8(b){return Uint8Array.from(atob(b),c=>c.charCodeAt(0))}
+async function decifra(env){const kk=chaveLot();if(!kk)throw new Error('sem chave');
+  const key=await crypto.subtle.importKey('raw',b64u8(kk),'AES-GCM',false,['decrypt']);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64u8(env.iv)},key,b64u8(env.ct));return JSON.parse(new TextDecoder().decode(pt))}
+async function loadLot(k){LOT=null;LOTERR='';
+  try{if(!LOTIDX)LOTIDX=await (await fetch('lotacao/index.json',{cache:'no-store'})).json()}catch(e){LOTIDX={fazendas:[]}}
+  if((LOTIDX.fazendas||[]).includes(k)){
+    try{const env=await (await fetch(`lotacao/${k}.json`,{cache:'no-store'})).json();const L2=await decifra(env);if(FKEY===k)LOT=L2}
+    catch(e){LOTERR='Não foi possível abrir os dados de lotação (a senha do site mudou?). Saia e entre de novo com a senha.'}}
+  else LOTERR=LOTIDX.erro?('ControlPasto: '+LOTIDX.erro):'Esta fazenda ainda não tem dados de lotação do ControlPasto.';
+  const sel_=$('#cam');[...sel_.options].forEach(o=>{if(o.value!=='ndvi')o.disabled=!LOT});
+  sel_.value=LOT?CAM:'ndvi';sel_.title=LOT?'':LOTERR;
+  document.querySelectorAll('.xlot').forEach(b=>b.hidden=!LOT);
+  aplicaCam();
+}
+function aplicaCam(){if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);
+  if(!lotOn()&&PAINEL&&PAINEL!=='ndvi'){montaLUT();if(RAST){escala();pintar()}}refresh()}
+let PAINEL='';
+function painel(){const m=lotOn()?CAM:'ndvi';if(m===PAINEL)return;PAINEL=m;
+  const H=lotOn()?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['lotes','Lote(s)'],['cab','cab'],['lot','UA/ha hoje'],['m12','média 12m']]
+    :[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['v','NDVI'],['d','Δ'],['dt','medido em']];
+  if(!H.some(h=>h[0]===sortK)){sortK='nome';sortA=true}
+  $('#thd').innerHTML='<tr>'+H.map(([k,t])=>`<th data-k="${k}">${t}</th>`).join('')+'</tr>';
+  if(lotOn()){$('#k1l').textContent='cabeças nos pastos';$('#k2l').textContent=CAM==='m12'?'UA/ha — média 12 meses':'UA/ha hoje';$('#k3l').textContent='pastos ocupados';
+    $('#legA').textContent='lotação baixa';$('#legB').textContent='alta';$('#tbtit').textContent='Pastos — lotação do ControlPasto';
+    $('#bar').style.background=`linear-gradient(90deg,${LRAMP.map((c,i)=>`rgb(${c}) ${Math.round(i/(LRAMP.length-1)*100)}%`).join(',')})`;
+    $('#ticks').innerHTML=[0,0.5,1,1.5,2,2.5,3].map(v=>`<span>${fmt(v,1)}${v===LOTMAX?'+':''}</span>`).join('')}
+  else{$('#k1l').textContent='NDVI médio dos pastos';$('#k2l').textContent='variação vs. imagem anterior';$('#k3l').textContent='área sem nuvem';$('#legA').textContent='NDVI baixo';$('#legB').textContent='NDVI alto';$('#tbtit').textContent='Pastos na imagem selecionada'}
+}
+function rowLot(f){const p=f.properties,e=lotDe(p.id);return {f,id:p.id,nome:p.nome,retiro:p.retiro,ha:p.area_ha,lotes:e?.lotes?.map(l=>l[0]).filter(Boolean).join(', ')||'',cab:e?e.cab:null,ua:e?e.ua:null,lot:e?e.lot:null,m12:e?e.m12:null,v:e?(CAM==='m12'?e.m12:e.lot):null}}
+function styleLot(f){const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
+  return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:hide?0:0.78,fillColor:lotCol(lotVal(f.properties.id))}}
+function tipLot(p){const e=lotDe(p.id);let h=`<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha`;
+  if(!e)return h+'<br><i>sem dado do ControlPasto</i>';
+  h+=e.cab?`<br>${fmt(e.cab,0)} cab · ${fmt(e.ua,0)} UA · <b>${fmt(e.lot)} UA/ha</b>`:'<br>sem animais hoje (descansando)';
+  h+=`<br>média 12 meses: ${fmt(e.m12)} UA/ha`;if(e.lotes?.length)h+='<br>'+e.lotes.map(l=>`lote ${l[0]||'—'}: ${fmt(l[1],0)} cab`).join('<br>');return h}
+function refreshLot(){
+  const rows=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).map(rowLot);
+  const T=LOT.total,filtro=!!$('#ret').value;
+  const ha=rows.reduce((a,r)=>a+(r.ha||0),0),cab=filtro?rows.reduce((a,r)=>a+(r.cab||0),0):T.cab,ua=filtro?rows.reduce((a,r)=>a+(r.ua||0),0):T.ua;
+  const m12=filtro?(ha?rows.reduce((a,r)=>a+(r.m12||0)*(r.ha||0),0)/ha:null):T.m12;
+  $('#k1').textContent=fmt(cab,0);$('#k2').textContent=fmt(CAM==='m12'?m12:(ha?ua/ha:null));$('#k2').className='';
+  $('#k3').textContent=`${rows.filter(r=>r.cab>0).length} de ${rows.length}`;
+  const nsm=LOT.sem_mapa.reduce((a,x)=>a+x[3].reduce((b,l)=>b+(l[1]||0),0),0);
+  $('#escnota').innerHTML=`UA = ${fmt(LOT.ua_kg,0)} kg de peso vivo · <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#3d73c4;vertical-align:-1px"></span> pasto descansando (sem animais) · ControlPasto lido em ${LOT.atualizado.slice(0,16).replace('T',' ')}`+(CAM==='m12'?` · média das ${LOT.datas.length-1} fotografias semanais (domingos) dos últimos 12 meses`:'')+(nsm&&!filtro?`<br>${fmt(nsm,0)} cab estão em piquetes do ControlPasto que não casaram com nenhum pasto do mapa (veja abaixo).`:'');
+  rows.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(x==null||x==='')return 1;if(y==null||y==='')return -1;if(typeof x==='string')return sortA?x.localeCompare(y,'pt',{numeric:true}):y.localeCompare(x,'pt',{numeric:true});return sortA?x-y:y-x});
+  const sw=v=>`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${lotCol(v)};margin-right:4px"></span>`;
+  $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td style="text-align:left;max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${r.lotes}">${r.lotes||'<span class=muted>—</span>'}</td><td>${r.cab==null?'–':fmt(r.cab,0)}</td><td>${sw(r.lot)}${fmt(r.lot)}</td><td>${sw(r.m12)}${fmt(r.m12)}</td></tr>`).join('');
+  $('#tinfo').textContent=`${rows.filter(r=>r.cab>0).length} pastos com animais`;
+  layer.setStyle(styleF);labels.clearLayers();
+  if(map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`${r.nome}<br>${r.v==null?'–':fmt(r.v)}`))}
+  drawChart();drawObras();drawCP();
+}
+const OPCOR=o=>/entr|compra|nasc/i.test(o)?'#2f9e44':/morte|óbito|obito/i.test(o)?'#d6336c':/sa[ií]da|venda|abate/i.test(o)?'#e8590c':/transf/i.test(o)?'#f08c00':/mudan|piquete/i.test(o)?'#1c7ed6':'#868e96';
+const esc=t=>String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+function graficoLot(serie,ha,m12,movs){ // serie [[cab,ua]] por LOT.datas
+  const ds=LOT.datas,W=400,H=150,L0=30,R0=6,T0=8,B0=24;const t=d=>new Date(d+'T12:00:00Z').getTime();const t0=t(ds[0]),t1=t(ds[ds.length-1]);
+  const v=serie.map(x=>ha?x[1]/ha:null);let hi=Math.max(0.5,...v.filter(x=>x!=null),m12||0);hi=Math.ceil(hi*2)/2;
+  const X=d=>L0+(W-L0-R0)*(t(d)-t0)/Math.max(1,t1-t0),Y=y=>T0+(H-T0-B0)*(1-y/hi);let g='';
+  const st_=hi>2?0.5:hi>1?0.25:0.1;for(let y=0;y<=hi+1e-9;y+=st_)g+=`<line x1="${L0}" x2="${W-R0}" y1="${Y(y)}" y2="${Y(y)}" stroke="var(--line)"/><text x="${L0-4}" y="${Y(y)+3}" font-size="9" text-anchor="end" fill="var(--mut)">${fmt(y,st_<0.5?2:1)}</text>`;
+  const months=[];let d=new Date(t0);d.setUTCDate(1);d.setUTCMonth(d.getUTCMonth()+1);while(d.getTime()<=t1){months.push(new Date(d));d.setUTCMonth(d.getUTCMonth()+1)}
+  months.forEach((m,i)=>{if(i%2)return;const iso=m.toISOString().slice(0,10);g+=`<text x="${X(iso)}" y="${H-12}" font-size="9" text-anchor="middle" fill="var(--mut)">${m.toLocaleDateString('pt-BR',{month:'short',year:'2-digit',timeZone:'UTC'})}</text>`});
+  // degraus: cada fotografia vale até a próxima
+  for(let i=0;i<ds.length-1;i++){if(v[i]==null)continue;const x0=X(ds[i]),x1=X(ds[i+1]);
+    if(v[i]<=0.005){g+=`<rect x="${x0}" y="${Y(0)-3}" width="${Math.max(0.5,x1-x0)}" height="3" fill="#3d73c4"><title>${fdate(ds[i])}: descansando</title></rect>`;continue}g+=`<rect x="${x0}" y="${Y(v[i])}" width="${Math.max(0.5,x1-x0)}" height="${Y(0)-Y(v[i])}" fill="${lotCol(v[i])}" fill-opacity=".85"><title>${fdate(ds[i])}: ${fmt(serie[i][0],0)} cab · ${fmt(v[i])} UA/ha</title></rect>`}
+  const n=ds.length-1;if(v[n]!=null)g+=`<circle cx="${X(ds[n])}" cy="${Y(v[n])}" r="3.2" fill="var(--ink)"><title>hoje: ${fmt(serie[n][0],0)} cab · ${fmt(v[n])} UA/ha</title></circle>`;
+  if(m12!=null)g+=`<line x1="${L0}" x2="${W-R0}" y1="${Y(m12)}" y2="${Y(m12)}" stroke="var(--ink)" stroke-dasharray="4 3" stroke-opacity=".7"/><text x="${W-R0}" y="${Y(m12)-3}" font-size="9" text-anchor="end" fill="var(--ink)">média 12m ${fmt(m12)}</text>`;
+  for(const m of movs||[]){if(m[0]<ds[0])continue;g+=`<path d="M${X(m[0])} ${H-B0+2} l-3.5 6 h7z" fill="${OPCOR(m[1])}"><title>${fdate(m[0])} · ${esc(m[1])}${m[2]?' · lote '+esc(m[2]):''}${m[3]!=null?' · '+fmt(m[3],0)+' cab':''}${m[5]?' '+esc(m[5]):''}</title></path>`}
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`}
+function tabelaMovs(ms,comPasto){if(!ms.length)return '<div class="muted">Nenhuma movimentação nos últimos 12 meses.</div>';
+  return `<div class="movs"><table><thead><tr><th>Data</th><th>Operação</th>${comPasto?'<th style="text-align:left">Pasto</th>':''}<th style="text-align:left">Lote</th><th>cab</th><th>kg</th><th style="text-align:left">De / para · obs.</th></tr></thead><tbody>`+
+  ms.slice().reverse().slice(0,300).map(m=>`<tr><td style="text-align:left">${fdate(m[0])}</td><td style="text-align:left"><span class="op" style="background:${OPCOR(m[1])}"></span>${esc(m[1])}</td>${comPasto?`<td style="text-align:left">${esc(m[7]||'')}</td>`:''}<td style="text-align:left">${esc(m[2])}</td><td>${m[3]==null?'':fmt(m[3],0)}</td><td>${m[4]?fmt(m[4],0):''}</td><td style="text-align:left;white-space:normal;min-width:90px">${esc([m[5],m[6]].filter(Boolean).join(' · '))}</td></tr>`).join('')+'</tbody></table></div>'}
+const LEGOPS='<div class="muted" style="margin-top:2px"><span style="display:inline-block;width:12px;height:3px;background:#3d73c4;vertical-align:middle"></span> descansando · ▲ movimentações: <span class="op" style="background:#2f9e44"></span>entrada <span class="op" style="background:#1c7ed6"></span>mudança de piquete <span class="op" style="background:#f08c00"></span>transferência <span class="op" style="background:#e8590c"></span>saída <span class="op" style="background:#d6336c"></span>morte</div>';
+function drawCP(){const c=$('#cpcard');
+  if(!LOT){c.hidden=!(LOTERR&&CAM!=='ndvi');if(!c.hidden)c.innerHTML=`<b>Lotação — ControlPasto</b><div class="aviso">${esc(LOTERR)}</div>`;return}
+  c.hidden=false;const f=sel?GJ.features.find(x=>x.properties.id===sel):null;
+  if(f){const p=f.properties,e=lotDe(p.id)||{lotes:[],s:[],cab:0};const ms=LOT.movs[p.id]||[];
+    c.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${esc(p.retiro)} · ${esc(p.nome)} — ControlPasto</h3><span class="muted">${fmt(p.area_ha,1)} ha${e.cp&&e.cp!==p.nome?' · no CP: '+esc(e.cp):''}</span></div>
+    <div class="kpis"><div class="kpi"><b>${fmt(e.cab,0)}</b><span>cabeças hoje</span></div><div class="kpi"><b>${fmt(e.lot)}</b><span>UA/ha hoje</span></div><div class="kpi"><b>${fmt(e.m12)}</b><span>UA/ha média 12 meses</span></div></div>
+    ${e.lotes?.length?`<table class="lotes"><thead><tr><th style="text-align:left">Lote atual</th><th style="text-align:left">Categoria</th><th>cab</th><th>peso médio</th><th>UA</th></tr></thead><tbody>${e.lotes.map(l=>`<tr><td>${esc(l[0]||'—')}</td><td>${esc(l[4]||'')}</td><td>${fmt(l[1],0)}</td><td>${l[2]?fmt(l[2],0)+' kg':'–'}</td><td>${fmt(l[3],1)}</td></tr>`).join('')}</tbody></table>`:'<div class="muted">Sem animais hoje: pasto descansando.</div>'}
+    <div style="margin-top:10px"><b style="font-size:13px">Lotação semana a semana (UA/ha)</b></div><div class="chart">${e.s?.length?graficoLot(e.s,p.area_ha,e.m12,ms):''}</div>${LEGOPS}
+    <div style="margin-top:10px"><b style="font-size:13px">Movimentações</b> <span class="muted">${ms.length} nos últimos 12 meses</span></div>${tabelaMovs(ms)}`;return}
+  // sem pasto escolhido: resumo da fazenda
+  const T=LOT.total,todas=[];for(const [id,ms] of Object.entries(LOT.movs)){const ff=GJ.features.find(x=>x.properties.id===id);for(const m of ms)todas.push([...m,ff?ff.properties.nome:''])}
+  todas.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);const vist=new Set(),ult=todas.filter(m=>{const k=m.slice(0,4).join('|');if(vist.has(k))return false;vist.add(k);return true}).slice(-60);
+  c.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${esc(D.fazenda)} — ControlPasto</h3><span class="muted">clique num pasto para ver o histórico dele</span></div>
+    <div class="kpis"><div class="kpi"><b>${fmt(T.ua,0)}</b><span>UA hoje</span></div><div class="kpi"><b>${fmt(T.lot)}</b><span>UA/ha hoje (${fmt(T.ha,0)} ha de pasto)</span></div><div class="kpi"><b>${fmt(T.m12)}</b><span>UA/ha média 12 meses</span></div></div>
+    <div><b style="font-size:13px">Lotação da fazenda semana a semana (UA/ha)</b></div><div class="chart">${graficoLot(T.s,T.ha,T.m12,[])}</div>
+    ${LOT.sem_mapa.length?`<div class="aviso"><b>Piquetes do ControlPasto sem pasto correspondente no mapa</b> (entram no total da fazenda, não no mapa):<br>${LOT.sem_mapa.map(([fz,pa,pq,ls])=>`${esc(pq||pa||'?')}${pa&&pq&&pa!==pq?' ('+esc(pa)+')':''}: ${ls.map(l=>`${esc(l[0]||'—')} ${fmt(l[1],0)} cab`).join(', ')}`).join('<br>')}</div>`:''}
+    <div style="margin-top:10px"><b style="font-size:13px">Últimas movimentações da fazenda</b></div>${tabelaMovs(ult.map(m=>[m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7]]),true)}`;
+}
+function exportaLot(tipo){if(!LOT)return;const P=new Map(GJ.features.map(f=>[f.properties.id,f.properties]));
+  if(tipo==='lot'){const L=[['fazenda','retiro','pasto','area_ha','piquete_controlpasto','cab_hoje','ua_hoje','ua_ha_hoje','ua_ha_media_12m','lotes_hoje',...LOT.datas.map(d=>'ua_ha_'+d)]];
+    for(const [id,e] of Object.entries(LOT.pastos)){const p=P.get(id)||{};const ha=p.area_ha||0;
+      L.push([D.fazenda,p.retiro,p.nome,csvN(ha),e.cp||'',e.cab,csvN(e.ua),csvN(e.lot),csvN(e.m12),(e.lotes||[]).map(l=>`${l[0]} (${l[1]} cab${l[2]?', '+Math.round(l[2])+' kg':''})`).join(' | '),...(e.s||[]).map(x=>csvN(ha?x[1]/ha:null))])}
+    csv(`lotacao_${FKEY}_${LOT.hoje}.csv`,L)}
+  else{const L=[['fazenda','retiro','pasto','data','operacao','lote','cab','peso_kg','de_para','obs']];
+    for(const [id,ms] of Object.entries(LOT.movs)){const p=P.get(id)||{};for(const m of ms)L.push([D.fazenda,p.retiro,p.nome,m[0],m[1],m[2],m[3]??'',csvN(m[4]),m[5],m[6]])}
+    csv(`movimentacoes_${FKEY}_${LOT.hoje}.csv`,L)}}
+$('#cam').onchange=()=>{CAM=$('#cam').value;st.set('ndvi_cam',CAM);aplicaCam()};
+
 gate();
 </script>
 </body>
