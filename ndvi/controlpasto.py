@@ -32,7 +32,7 @@ USER = os.environ.get('CONTROLPASTO_USUARIO', '').strip(); PASS = os.environ.get
 SENHA = os.environ.get('SENHA_SITE') or '123321'
 FAKE = os.environ.get('FAKE') == '1'; DEBUG = os.environ.get('CP_DEBUG') == '1'
 UA_KG = 450.0
-PARSER_V = 1           # sobe quando muda a leitura: o cache inteiro é lido de novo
+PARSER_V = 2           # sobe quando muda a leitura: o cache inteiro é lido de novo
 SEMANAS = 53           # domingos para trás (12 meses + 1 semana)
 REFAZ_DIAS = 35        # fotografias mais novas que isto são lidas de novo (lançamentos com data retroativa)
 OPS = {1: 'Entrada', 2: 'Saída', 3: 'Morte', 4: 'Transferência', 5: 'Mudança de piquete', 6: 'Pesagem', 7: 'Ajuste', 8: 'Previsão'}
@@ -195,8 +195,57 @@ def folhas(x, ctx=None, nv=None, out=None):
         else: out.append((c2, esc))
     return out
 
+def _cp_lista(res):
+    return res if isinstance(res, list) else (res.get('result') or res.get('Fazendas') or []) if isinstance(res, dict) else []
+def _fz_nome(it):
+    f = it.get('Fazenda')
+    return (f.get('Fazenda') or f.get('Nome') or '') if isinstance(f, dict) else str(f or '')
+LOTE_VISTO = {}
+def lotes_cp(res):
+    """formato do ControlPasto (out/2026): [{Fazenda:{Banco,Fazenda}, CargaInst:{..}, Pastos:[{Pasto, Area, Piquetes:[{Piquete, Area,
+    QtAnm, PVCab, UA, UA_ha, Lotes:[...]}]}]}] -> [[fz, pasto, piquete, lote, cab, pv, ua, categoria]]; None se não for esse formato"""
+    L = _cp_lista(res)
+    if not L or not all(isinstance(it, dict) and 'Pastos' in it for it in L): return None
+    rows = []
+    for it in L:
+        fz = _fz_nome(it)
+        for pa in it.get('Pastos') or []:
+            for pq in pa.get('Piquetes') or []:
+                cabp = num(pq.get('QtAnm')) or 0; uap = num(pq.get('UA')); pvp = num(pq.get('PVCab'))
+                soma = 0
+                for l in pq.get('Lotes') or []:
+                    if not isinstance(l, dict): continue
+                    if not LOTE_VISTO: LOTE_VISTO.update({k: type(v).__name__ + (f' ex.: {v[:30]!r}' if isinstance(v, str) else '') for k, v in l.items()})
+                    cab = num(l.get('QtAnm', campo(l, *RX_CAB, evita=r'piq|past|faz|dias'))) or 0
+                    if cab <= 0: continue
+                    pv = num(l.get('PVCab', campo(l, *RX_PV, evita=r'total|entr'))); ua = num(l.get('UA', campo(l, *RX_UA)))
+                    if ua is None and pv: ua = cab * pv / UA_KG
+                    nome = l.get('Lote') if isinstance(l.get('Lote'), str) else nome_no(l, 'lote')
+                    rows.append([fz, str(pa.get('Pasto') or ''), str(pq.get('Piquete') or ''), str(nome or ''), cab, pv, ua, campo(l, r'categ', tipo=str) or '']); soma += cab
+                if cabp - soma > 0.5:  # animais do piquete sem lote detalhado
+                    resto = cabp - soma; ua = (uap * resto / cabp) if uap and not soma else (resto * pvp / UA_KG if pvp else None)
+                    rows.append([fz, str(pa.get('Pasto') or ''), str(pq.get('Piquete') or ''), '', resto, pvp, ua, ''])
+    return rows
+def movs_cp(res):
+    """[{Fazenda:{..}, HistOper:[{Data, Hora, Lote, LoteOrig, Oper, QtAnm}]}] -> [[data, fz, piq(None), op, lote, cab, peso, lote_orig, hora]]"""
+    L = _cp_lista(res)
+    if not L or not all(isinstance(it, dict) and 'HistOper' in it for it in L): return None
+    rows = []
+    for it in L:
+        fz = _fz_nome(it)
+        for o in it.get('HistOper') or []:
+            d = iso(o.get('Data'))
+            if not d: continue
+            opn = num(o.get('Oper')); op = OPS.get(int(opn), f'Operação {int(opn)}') if opn is not None else str(o.get('Oper') or '')
+            if op == 'Previsão': continue
+            peso = num(campo(o, *RX_PV, evita=r'total'))
+            rows.append([d, fz, None, op, str(o.get('Lote') or ''), num(o.get('QtAnm')), peso, str(o.get('LoteOrig') or ''), str(o.get('Hora') or '')[:5]])
+    rows.sort(key=lambda r: (r[0], r[8])); return rows
+
 def lotes_de(res):
     """carga instantânea -> [[fz, pasto, piquete, lote, cab, pv, ua, categoria]]"""
+    r = lotes_cp(res)
+    if r is not None: return r
     rows = []
     for ctx, f in folhas(res):
         cab = num(campo(f, *RX_CAB, evita=r'piq|past|faz|dias|capac'))
@@ -218,6 +267,8 @@ def iso(v):
     return f'{m[1]}-{m[2]}-{m[3]}' if m[1] else f'{m[6]}-{m[5]}-{m[4]}'
 def movs_de(res):
     """histórico -> [[data, fz, piq, op, lote, cab, peso, outro_piq, obs]] (piq = pasto onde aconteceu)"""
+    r = movs_cp(res)
+    if r is not None: return r
     rows = []
     for ctx, f in folhas(res):
         todos = dict(ctx.get('_', {}))
@@ -317,12 +368,43 @@ def monta(key, hoje_s, datas, snaps, movs, atualizado):
     tot.update({'cab': tot['s'][-1][0], 'ua': tot['s'][-1][1], 'ha': round(ha_t, 1),
                 'lot': round(tot['s'][-1][1] / ha_t, 3) if ha_t else None,
                 'm12': round(sum(u for c, u in tot['s'][:-1]) / max(1, len(tot['s']) - 1) / ha_t, 3) if ha_t else None})
+    # onde estava cada lote em cada fotografia (o histórico do ControlPasto não traz o piquete, só o lote)
+    onde = {}
+    for d in datas:
+        for fz, pa, pq, lo, cab, pv, ua, cat in snaps.get(d, []):
+            if site_key(fz) != key or not lo: continue
+            onde.setdefault((norm_faz(fz), lo.strip().upper()), {}).setdefault(d, set()).add((fz, pa, pq))
+    import bisect
+    def loc(fz, lo, d, antes):
+        h = onde.get((norm_faz(fz), (lo or '').strip().upper()))
+        if not h: return None, set()
+        ds = sorted(h); i = bisect.bisect_right(ds, d) - 1 if antes else bisect.bisect_left(ds, d)
+        if antes and i >= 0 and (dt.date.fromisoformat(d) - dt.date.fromisoformat(ds[i])).days <= 21: return ds[i], h[ds[i]]
+        if not antes and i < len(ds) and (dt.date.fromisoformat(ds[i]) - dt.date.fromisoformat(d)).days <= 21: return ds[i], h[ds[i]]
+        return None, set()
     M = {}; n_sem = 0
-    for d, fz, pq, op, lo, cab, peso, outro, obs in movs:
+    nomes = lambda S: ', '.join(sorted({x[2] or x[1] for x in S}))
+    for m in movs:
+        d, fz, pq, op, lo, cab, peso = m[:7]
         if site_key(fz) != key: continue
-        partes = cas.partes(fz, None, pq)
-        if not partes: n_sem += 1; continue
-        for p in partes: M.setdefault(p['id'], []).append([d, op, lo, cab, peso, outro or '', obs])
+        if pq:  # formato genérico, já com piquete
+            alvo = [(cas.partes(fz, None, pq) or [], m[7] or '')]
+        else:
+            _, A = loc(fz, lo, d, True); _, B = loc(fz, lo, d, False)
+            if not A and not B and m[7]: _, A = loc(fz, m[7], d, True)  # lote novo: onde estava o lote de origem
+            orig = f'lote de origem {m[7]}' if m[7] and m[7] != lo else ''
+            alvo = []
+            if A and B and A != B:
+                alvo.append(([p for x in A for p in (cas.partes(*x) or [])], '→ ' + nomes(B)))
+                alvo.append(([p for x in B for p in (cas.partes(*x) or [])], '← ' + nomes(A)))
+            else:
+                alvo.append(([p for x in (A or B) for p in (cas.partes(*x) or [])], ''))
+            alvo = [(ps, ' · '.join(t for t in (o, orig) if t)) for ps, o in alvo]
+        achou = False
+        for ps, outro in alvo:
+            for p in {id(p): p for p in ps}.values():
+                M.setdefault(p['id'], []).append([d, op, lo, cab, peso, outro, '']); achou = True
+        if not achou: n_sem += 1
     return {'fazenda': key, 'atualizado': atualizado, 'hoje': hoje_s, 'ua_kg': UA_KG, 'datas': datas, 'pastos': P, 'total': tot,
             'sem_mapa': [[fz, pa, pq, ls] for (fz, pa, pq), ls in sorted(sem.items())], 'movs': M, 'movs_sem_mapa': n_sem}
 
@@ -377,6 +459,7 @@ def main():
             # 1) hoje, sempre e primeiro
             res, snaps[hoje_s] = carga(hoje_s); brutos['carga_hoje'] = res
             print('\n'.join(esquema(res, 'LstFz_CargaInst')[:160]))
+            print('campos de cada lote (Lotes[]):', LOTE_VISTO or '(nenhum piquete com lotes detalhados)')
             # 2) operações: 380 dias na primeira vez; depois, desde a última leitura menos 15 dias
             ini = (hoje - dt.timedelta(days=380)).isoformat()
             if cache.get('movs_ate'): ini = max(ini, (dt.date.fromisoformat(cache['movs_ate']) - dt.timedelta(days=15)).isoformat())
