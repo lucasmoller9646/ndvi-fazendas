@@ -724,6 +724,8 @@ function lotOn(){return CAM!=='ndvi'&&!!LOT}
 function lotCol(v){if(v==null||isNaN(v))return '#8a8f8f';if(v<=0.005)return '#3d73c4';
   const t=Math.min(1,v/LOTMAX)*(LRAMP.length-1),k=Math.min(LRAMP.length-2,Math.floor(t)),f=t-k;return 'rgb('+LRAMP[k].map((c,j)=>Math.round(c+(LRAMP[k+1][j]-c)*f)).join(',')+')'}
 function lotDe(id){return LOT?.pastos?.[id]||null}
+function m12Completa(){return LOT&&(new Date(LOT.hoje)-new Date(LOT.datas[0]))/864e5>=340}
+function mRot(curto){return m12Completa()?(curto?'média 12m':'média 12 meses'):(curto?'média desde '+fdate(LOT.datas[0]).slice(0,5):'média desde '+fdate(LOT.datas[0]))}
 function lotVal(id){const e=lotDe(id);if(!e)return null;return CAM==='m12'?e.m12:e.lot}
 function b64u8(b){return Uint8Array.from(atob(b),c=>c.charCodeAt(0))}
 async function decifra(env){const kk=chaveLot();if(!kk)throw new Error('sem chave');
@@ -738,17 +740,17 @@ async function loadLot(k){LOT=null;LOTERR='';
   const sel_=$('#cam');[...sel_.options].forEach(o=>{if(o.value!=='ndvi')o.disabled=!LOT});
   sel_.value=LOT?CAM:'ndvi';sel_.title=LOT?'':LOTERR;
   document.querySelectorAll('.xlot').forEach(b=>b.hidden=!LOT);
-  aplicaCam();
+  const ant=PAINEL;PAINEL='';aplicaCam(ant);
 }
-function aplicaCam(){if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);
-  if(!lotOn()&&PAINEL&&PAINEL!=='ndvi'){montaLUT();if(RAST){escala();pintar()}}refresh()}
+function aplicaCam(prev=PAINEL){if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);
+  if(!lotOn()&&prev&&prev!=='ndvi'){montaLUT();if(RAST){escala();pintar()}}refresh()}
 let PAINEL='';
 function painel(){const m=lotOn()?CAM:'ndvi';if(m===PAINEL)return;PAINEL=m;
-  const H=lotOn()?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['lotes','Lote(s)'],['cab','cab'],['lot','UA/ha hoje'],['m12','média 12m']]
+  const H=lotOn()?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['lotes','Lote(s)'],['cab','cab'],['lot','UA/ha hoje'],['m12',mRot(true)]]
     :[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['v','NDVI'],['d','Δ'],['dt','medido em']];
   if(!H.some(h=>h[0]===sortK)){sortK='nome';sortA=true}
   $('#thd').innerHTML='<tr>'+H.map(([k,t])=>`<th data-k="${k}">${t}</th>`).join('')+'</tr>';
-  if(lotOn()){$('#k1l').textContent='cabeças nos pastos';$('#k2l').textContent=CAM==='m12'?'UA/ha — média 12 meses':'UA/ha hoje';$('#k3l').textContent='pastos ocupados';
+  if(lotOn()){$('#k1l').textContent='cabeças nos pastos';$('#k2l').textContent=CAM==='m12'?'UA/ha — '+mRot():'UA/ha hoje';$('#k3l').textContent='pastos ocupados';
     $('#legA').textContent='lotação baixa';$('#legB').textContent='alta';$('#tbtit').textContent='Pastos — lotação do ControlPasto';
     $('#bar').style.background=`linear-gradient(90deg,${LRAMP.map((c,i)=>`rgb(${c}) ${Math.round(i/(LRAMP.length-1)*100)}%`).join(',')})`;
     $('#ticks').innerHTML=[0,0.5,1,1.5,2,2.5,3].map(v=>`<span>${fmt(v,1)}${v===LOTMAX?'+':''}</span>`).join('')}
@@ -769,7 +771,7 @@ function refreshLot(){
   $('#k1').textContent=fmt(cab,0);$('#k2').textContent=fmt(CAM==='m12'?m12:(ha?ua/ha:null));$('#k2').className='';
   $('#k3').textContent=`${rows.filter(r=>r.cab>0).length} de ${rows.length}`;
   const nsm=LOT.sem_mapa.reduce((a,x)=>a+x[3].reduce((b,l)=>b+(l[1]||0),0),0);
-  $('#escnota').innerHTML=`UA = ${fmt(LOT.ua_kg,0)} kg de peso vivo · <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#3d73c4;vertical-align:-1px"></span> pasto descansando (sem animais) · ControlPasto lido em ${LOT.atualizado.slice(0,16).replace('T',' ')}`+(CAM==='m12'?` · média das ${LOT.datas.length-1} fotografias semanais (domingos) dos últimos 12 meses`:'')+(nsm&&!filtro?`<br>${fmt(nsm,0)} cab estão em piquetes do ControlPasto que não casaram com nenhum pasto do mapa (veja abaixo).`:'');
+  $('#escnota').innerHTML=`UA = ${fmt(LOT.ua_kg,0)} kg de peso vivo · <span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#3d73c4;vertical-align:-1px"></span> pasto descansando (sem animais) · ControlPasto lido em ${LOT.atualizado.slice(0,16).replace('T',' ')}`+(CAM==='m12'?` · média das ${LOT.datas.length-1} fotografias semanais (domingos)`:'')+(m12Completa()?'':`<br><b>Histórico ainda sendo lido:</b> a média vai de ${fdate(LOT.datas[0])} até hoje (${LOT.datas.length-1} domingos). Os domingos que faltam entram a cada leitura (4 por dia) até completar 12 meses.`)+(nsm&&!filtro?`<br>${fmt(nsm,0)} cab estão em piquetes do ControlPasto que não casaram com nenhum pasto do mapa (veja abaixo).`:'');
   rows.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(x==null||x==='')return 1;if(y==null||y==='')return -1;if(typeof x==='string')return sortA?x.localeCompare(y,'pt',{numeric:true}):y.localeCompare(x,'pt',{numeric:true});return sortA?x-y:y-x});
   const sw=v=>`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${lotCol(v)};margin-right:4px"></span>`;
   $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td style="text-align:left;max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${r.lotes}">${r.lotes||'<span class=muted>—</span>'}</td><td>${r.cab==null?'–':fmt(r.cab,0)}</td><td>${sw(r.lot)}${fmt(r.lot)}</td><td>${sw(r.m12)}${fmt(r.m12)}</td></tr>`).join('');
@@ -791,7 +793,7 @@ function graficoLot(serie,ha,m12,movs){ // serie [[cab,ua]] por LOT.datas
   for(let i=0;i<ds.length-1;i++){if(v[i]==null)continue;const x0=X(ds[i]),x1=X(ds[i+1]);
     if(v[i]<=0.005){g+=`<rect x="${x0}" y="${Y(0)-3}" width="${Math.max(0.5,x1-x0)}" height="3" fill="#3d73c4"><title>${fdate(ds[i])}: descansando</title></rect>`;continue}g+=`<rect x="${x0}" y="${Y(v[i])}" width="${Math.max(0.5,x1-x0)}" height="${Y(0)-Y(v[i])}" fill="${lotCol(v[i])}" fill-opacity=".85"><title>${fdate(ds[i])}: ${fmt(serie[i][0],0)} cab · ${fmt(v[i])} UA/ha</title></rect>`}
   const n=ds.length-1;if(v[n]!=null)g+=`<circle cx="${X(ds[n])}" cy="${Y(v[n])}" r="3.2" fill="var(--ink)"><title>hoje: ${fmt(serie[n][0],0)} cab · ${fmt(v[n])} UA/ha</title></circle>`;
-  if(m12!=null)g+=`<line x1="${L0}" x2="${W-R0}" y1="${Y(m12)}" y2="${Y(m12)}" stroke="var(--ink)" stroke-dasharray="4 3" stroke-opacity=".7"/><text x="${W-R0}" y="${Y(m12)-3}" font-size="9" text-anchor="end" fill="var(--ink)">média 12m ${fmt(m12)}</text>`;
+  if(m12!=null)g+=`<line x1="${L0}" x2="${W-R0}" y1="${Y(m12)}" y2="${Y(m12)}" stroke="var(--ink)" stroke-dasharray="4 3" stroke-opacity=".7"/><text x="${W-R0}" y="${Y(m12)-3}" font-size="9" text-anchor="end" fill="var(--ink)">${mRot(true)} ${fmt(m12)}</text>`;
   for(const m of movs||[]){if(m[0]<ds[0])continue;g+=`<path d="M${X(m[0])} ${H-B0+2} l-3.5 6 h7z" fill="${OPCOR(m[1])}"><title>${fdate(m[0])} · ${esc(m[1])}${m[2]?' · lote '+esc(m[2]):''}${m[3]!=null?' · '+fmt(m[3],0)+' cab':''}${m[5]?' '+esc(m[5]):''}</title></path>`}
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}</svg>`}
 function tabelaMovs(ms,comPasto){if(!ms.length)return '<div class="muted">Nenhuma movimentação nos últimos 12 meses.</div>';
@@ -803,15 +805,15 @@ function drawCP(){const c=$('#cpcard');
   c.hidden=false;const f=sel?GJ.features.find(x=>x.properties.id===sel):null;
   if(f){const p=f.properties,e=lotDe(p.id)||{lotes:[],s:[],cab:0};const ms=LOT.movs[p.id]||[];
     c.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${esc(p.retiro)} · ${esc(p.nome)} — ControlPasto</h3><span class="muted">${fmt(p.area_ha,1)} ha${e.cp&&e.cp!==p.nome?' · no CP: '+esc(e.cp):''}</span></div>
-    <div class="kpis"><div class="kpi"><b>${fmt(e.cab,0)}</b><span>cabeças hoje</span></div><div class="kpi"><b>${fmt(e.lot)}</b><span>UA/ha hoje</span></div><div class="kpi"><b>${fmt(e.m12)}</b><span>UA/ha média 12 meses</span></div></div>
-    ${e.lotes?.length?`<table class="lotes"><thead><tr><th style="text-align:left">Lote atual</th><th style="text-align:left">Categoria</th><th>cab</th><th>peso médio</th><th>UA</th></tr></thead><tbody>${e.lotes.map(l=>`<tr><td>${esc(l[0]||'—')}</td><td>${esc(l[4]||'')}</td><td>${fmt(l[1],0)}</td><td>${l[2]?fmt(l[2],0)+' kg':'–'}</td><td>${fmt(l[3],1)}</td></tr>`).join('')}</tbody></table>`:'<div class="muted">Sem animais hoje: pasto descansando.</div>'}
+    <div class="kpis"><div class="kpi"><b>${fmt(e.cab,0)}</b><span>cabeças hoje</span></div><div class="kpi"><b>${fmt(e.lot)}</b><span>UA/ha hoje</span></div><div class="kpi"><b>${fmt(e.m12)}</b><span>UA/ha ${mRot()}</span></div></div>
+    ${e.lotes?.length?`<table class="lotes"><thead><tr><th style="text-align:left">Lote atual</th>${e.lotes.some(l=>l[4])?'<th style="text-align:left">Categoria</th>':''}<th>cab</th><th>peso médio</th><th>UA</th></tr></thead><tbody>${e.lotes.map(l=>`<tr><td>${esc(l[0]||'(sem lote)')}</td>${e.lotes.some(l=>l[4])?`<td>${esc(l[4]||'')}</td>`:''}<td>${fmt(l[1],0)}</td><td>${l[2]?fmt(l[2],0)+' kg':'–'}</td><td>${fmt(l[3],1)}</td></tr>`).join('')}</tbody></table>`:'<div class="muted">Sem animais hoje: pasto descansando.</div>'}
     <div style="margin-top:10px"><b style="font-size:13px">Lotação semana a semana (UA/ha)</b></div><div class="chart">${e.s?.length?graficoLot(e.s,p.area_ha,e.m12,ms):''}</div>${LEGOPS}
     <div style="margin-top:10px"><b style="font-size:13px">Movimentações</b> <span class="muted">${ms.length} nos últimos 12 meses</span></div>${tabelaMovs(ms)}`;return}
   // sem pasto escolhido: resumo da fazenda
   const T=LOT.total,todas=[];for(const [id,ms] of Object.entries(LOT.movs)){const ff=GJ.features.find(x=>x.properties.id===id);for(const m of ms)todas.push([...m,ff?ff.properties.nome:''])}
   todas.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);const vist=new Set(),ult=todas.filter(m=>{const k=m.slice(0,4).join('|');if(vist.has(k))return false;vist.add(k);return true}).slice(-60);
   c.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${esc(D.fazenda)} — ControlPasto</h3><span class="muted">clique num pasto para ver o histórico dele</span></div>
-    <div class="kpis"><div class="kpi"><b>${fmt(T.ua,0)}</b><span>UA hoje</span></div><div class="kpi"><b>${fmt(T.lot)}</b><span>UA/ha hoje (${fmt(T.ha,0)} ha de pasto)</span></div><div class="kpi"><b>${fmt(T.m12)}</b><span>UA/ha média 12 meses</span></div></div>
+    <div class="kpis"><div class="kpi"><b>${fmt(T.ua,0)}</b><span>UA hoje</span></div><div class="kpi"><b>${fmt(T.lot)}</b><span>UA/ha hoje (${fmt(T.ha,0)} ha de pasto)</span></div><div class="kpi"><b>${fmt(T.m12)}</b><span>UA/ha ${mRot()}</span></div></div>
     <div><b style="font-size:13px">Lotação da fazenda semana a semana (UA/ha)</b></div><div class="chart">${graficoLot(T.s,T.ha,T.m12,[])}</div>
     ${LOT.sem_mapa.length?`<div class="aviso"><b>Piquetes do ControlPasto sem pasto correspondente no mapa</b> (entram no total da fazenda, não no mapa):<br>${LOT.sem_mapa.map(([fz,pa,pq,ls])=>`${esc(pq||pa||'?')}${pa&&pq&&pa!==pq?' ('+esc(pa)+')':''}: ${ls.map(l=>`${esc(l[0]||'—')} ${fmt(l[1],0)} cab`).join(', ')}`).join('<br>')}</div>`:''}
     <div style="margin-top:10px"><b style="font-size:13px">Últimas movimentações da fazenda</b></div>${tabelaMovs(ult.map(m=>[m[0],m[1],m[2],m[3],m[4],m[5],m[6],m[7]]),true)}`;

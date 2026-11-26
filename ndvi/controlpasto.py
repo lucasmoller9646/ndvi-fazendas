@@ -47,11 +47,33 @@ def sem_acento(s):
 def norm_faz(s):
     s = sem_acento(s).lower(); s = re.sub(r'\b(estancia|fazenda|establecimiento|hacienda)\b', ' ', s)
     return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', ' ', s)).strip()
+SINON = {'SUR': 'SUL', 'ESTE': 'LESTE', 'CORRAL': 'CURRAL', 'LECHERA': 'LEITERIA', 'ROMERIA': 'ROMARIA'}
+ROMANO = {'I': '1', 'II': '2', 'III': '3', 'IV': '4', 'V': '5', 'VI': '6'}
 def norm_piq(s):
-    s = sem_acento(s).upper(); s = re.sub(r'\b(PIQUETE|PIQ|PASTO|POTRERO|PASTURA)\b\.?', '', s)
-    s = re.sub(r'[\s_.\-/]+', '', s); return re.sub(r'^0+(?=\d)', '', s)
+    s = sem_acento(s).upper(); s = re.sub(r'\b(PIQUETE|PIQ|PASTO|POTRERO|PASTURA)\b\.?', ' ', s)
+    s = re.sub(r'[A-Z]+', lambda m: SINON.get(m[0], m[0]), s)
+    s = re.sub(r'(?<=[A-Z] )(I{1,3}|IV|VI?)\b', lambda m: ROMANO[m[0]], s)   # 'Invernadita II 3' -> 'Invernadita 2 3'
+    s = re.sub(r'(?<![0-9])0+(?=[0-9])', '', s)                              # zeros à esquerda de cada número: A06 -> A6
+    return re.sub(r'[\s_.\-/()]+', '', s)
+def sem_sufixo(s):  # piquete subdividido: 'C01Aa' -> 'C01A', 'E13 SURb' -> 'E13 SUR'
+    m = re.match(r'^(.*[0-9A-Z])[a-z]{1,2}$', str(s or '').strip())
+    return m[1] if m else None
 def base_piq(s):  # 'E13-norte' -> 'E13'
-    return norm_piq(re.sub(r'[\s\-_]*(norte|sul|leste|oeste|nova|novo|velho|a\.?n\.?)$', '', str(s), flags=re.I))
+    return norm_piq(re.sub(r'[\s\-_]*(norte|sul|sur|leste|oeste|medio|nova|novo|velho|\(\d+\))$', '', str(s), flags=re.I))
+def componentes(nome):
+    """'A37-38' -> A37, A38; 'B16-31' -> B16..B31; '08/09' -> 8, 9; '24 A/C' -> 24A, 24C; 'A29-30-33' -> A29, A30, A33"""
+    partes = re.split(r'\s*[-/]\s*', str(nome).strip())
+    if len(partes) < 2: return []
+    m0 = re.match(r'^([A-Za-z]*)\s*(\d+)\s*([A-Za-z]*)$', partes[0])
+    if not m0: return []
+    pre, n0, suf = m0.groups(); out = [partes[0]]
+    for q in partes[1:]:
+        if re.fullmatch(r'\d+', q): out.append(pre + q + suf)
+        elif re.fullmatch(r'[A-Za-z]{1,2}', q) and suf: out.append(pre + n0 + ' ' + q)
+        else: out.append(q)
+    if len(partes) == 2 and re.fullmatch(r'\d+', partes[1]) and not suf and 0 < int(partes[1]) - int(n0) <= 20 and '/' not in nome:
+        out = [pre + str(i) for i in range(int(n0), int(partes[1]) + 1)]
+    return [norm_piq(x) for x in out]
 
 def site_key(fz_cp):
     n = norm_faz(fz_cp)
@@ -307,25 +329,41 @@ def carrega_pastos(key):
 class Casador:
     """casa (fazenda CP, pasto CP, piquete CP) com o pasto do mapa; um piquete pode cair em várias partes (norte/sul)"""
     def __init__(self, key, props):
-        self.key = key; self.props = props; self.ex = {}; self.base = {}
+        self.key = key; self.props = props; self.ex = {}; self.base = {}; self.comp = {}
         multi = len({p.get('retiro') for p in props}) > 1
         for p in props:
             if p.get('area_ha', 0) > 5000: continue  # limite legal inteiro não é pasto
             n = norm_piq(p['nome'])
             self.ex.setdefault(n, []).append(p); self.base.setdefault(base_piq(p['nome']), []).append(p)
             if multi: self.ex.setdefault(norm_faz(p.get('retiro')) + '|' + n, []).append(p)
+            for c in componentes(p['nome']): self.comp.setdefault(c, []).append(p)
     @staticmethod
     def _fz(fz):
         n = norm_faz(fz); return {'lusipar central': 'lusipar'}.get(n, n)
+    def _um(self, fz, nome):
+        n = norm_piq(nome)
+        for k in (self._fz(fz) + '|' + n, n):
+            if k in self.ex: return self.ex[k]
+        return None
     def partes(self, fz, pa, pq):
-        for nome in (pq, pa):
+        sp = sem_sufixo(pq)
+        ordem = ([pq] if not sp else []) + [pa, sp]
+        for nome in ordem:
+            if nome and (r := self._um(fz, nome)): return r
+        for nome in (sp or pq, pa):
             if not nome: continue
             n = norm_piq(nome)
-            for k in (self._fz(fz) + '|' + n, n):
-                if k in self.ex: return self.ex[k]
+            if n in self.comp: return self.comp[n]
             if n in self.base: return self.base[n]
             b = base_piq(nome)
             if b in self.base: return self.base[b]
+            for c in componentes(nome):  # 'A30/29' do ControlPasto -> pasto 'A29-30-33' do mapa
+                r = self.ex.get(c) or self.comp.get(c)
+                if r: return r
+        for nome in (pq, pa):  # último recurso: subdivisão com letra ('12 B' -> 12, '16B' -> 16) ou número ('Recepcion 1D' -> Recepcion)
+            if not nome: continue
+            for alt in (re.sub(r'\s*[A-Za-z]$', '', nome.strip()), re.sub(r'\s+\d+[A-Za-z]?$', '', nome.strip())):
+                if alt and alt != nome.strip() and (r := self._um(fz, alt)): return r
         return None
 
 def domingos(hoje):
