@@ -5,7 +5,10 @@ A cada execução:
   2. baixa, para cada data, o NDVI (10 m) já com a máscara de nuvem/sombra (SCL) aplicada;
   3. calcula NDVI médio, P10, P90 e % de área limpa de cada pasto;
   4. salva a imagem colorida (para o mapa) quando a fazenda está razoavelmente limpa de nuvens;
-  5. reescreve docs/data/<fazenda>.json, que alimenta a página do GitHub Pages.
+  5. reescreve docs/data/<fazenda>.json, que alimenta a página do GitHub Pages;
+  6. gera o "entorno": a última imagem Sentinel-2 da fazenda inteira com 2 km de borda em volta (20 m),
+     usada pelo app Registro de manejo (Guía de la estancia → NDVI). Variáveis: ENTORNO_M (padrão 2000;
+     0 desliga), ENTORNO_RES (padrão 20 m). Não mexe na grade de 10 m da série, das obras nem da página.
 
 Credenciais: variáveis de ambiente CDSE_CLIENT_ID e CDSE_CLIENT_SECRET (segredos do repositório).
 Teste sem internet: FAKE=1 python ndvi/run.py  (gera imagens sintéticas).
@@ -107,6 +110,52 @@ def fetch_ndvi(bbox, W, H, day):
     with rasterio.MemoryFile(r.content) as mf, mf.open() as ds:
         a = ds.read().astype('float32')
     return a[0], a[1]
+
+# ---------------------------------------------------------------- entorno (fazenda + borda)
+ENTORNO_M = float(os.environ.get('ENTORNO_M', '2000'))
+ENTORNO_RES = float(os.environ.get('ENTORNO_RES', '20'))
+
+def entorno_bbox(f, feats):
+    """bbox dos pastos (e do limite, se houver) + ENTORNO_M metros; largura/altura em pixels"""
+    rings = [r for ft in feats for r in _rings(ft['geometry'])]
+    if f.get('limite'):
+        try:
+            lim = json.loads((ROOT / f['limite']).read_text(encoding='utf-8'))
+            rings += [r for ft in lim.get('features', []) if ft.get('geometry') for r in _rings(ft['geometry'])]
+        except Exception as e:
+            print('  limite ilegível, uso só os pastos:', e)
+    xs = [c[0] for r in rings for c in r]; ys = [c[1] for r in rings for c in r]
+    lat = (min(ys) + max(ys)) / 2
+    dy = ENTORNO_M / 110570; dx = ENTORNO_M / (111320 * math.cos(math.radians(lat)))
+    bb = [round(min(xs) - dx, 5), round(min(ys) - dy, 5), round(max(xs) + dx, 5), round(max(ys) + dy, 5)]
+    wm = (bb[2] - bb[0]) * 111320 * math.cos(math.radians(lat)); hm = (bb[3] - bb[1]) * 110570
+    res = max(ENTORNO_RES, math.ceil(max(wm, hm) / 2400))      # Sentinel Hub: até 2500 px por lado
+    return bb, max(1, int(round(wm / res))), max(1, int(round(hm / res))), res
+
+def atualiza_entorno(key, f, feats, D):
+    """refaz o entorno quando há passagem Sentinel-2 com mapa mais nova que a do entorno guardado"""
+    if ENTORNO_M <= 0 or os.environ.get('SEM_ENTORNO') == '1':
+        return
+    ps = [p for p in D['passagens'] if p.get('img') and p.get('sat', 'S2') == 'S2']
+    if not ps:
+        return
+    p = ps[-1]; E = D.get('entorno') or {}
+    bb, W, H, res = entorno_bbox(f, feats)
+    if E.get('data') == p['data'] and E.get('bbox') == bb and E.get('img') and (DOCS / E['img']).exists():
+        return
+    try:
+        nd, dm = fetch_ndvi(bb, W, H, p['data'])
+    except Exception as e:
+        print(f"  entorno {p['data']}: erro ({e}); fica para a próxima execução"); return
+    if nd.shape != (H, W):
+        print('  entorno: tamanho inesperado', nd.shape); return
+    nome = f"img/{key}/entorno_{p['data']}.png"
+    write_map(DOCS / nome, nd)
+    if E.get('img') and E['img'] != nome and (DOCS / E['img']).exists():
+        (DOCS / E['img']).unlink()
+    D['entorno'] = {'data': p['data'], 'sat': 'S2', 'img': nome, 'bbox': bb, 'buffer_m': int(ENTORNO_M),
+                    'res_m': res, 'fmt': 'g8'}
+    print(f"  entorno {p['data']}: fazenda + {int(ENTORNO_M)} m, {W}x{H} px a {res:g} m")
 
 # ---------------------------------------------------------------- cores (paleta NDVI)
 STOPS = [(-0.2, (120, 80, 50)), (0.0, (165, 120, 75)), (0.2, (215, 180, 110)), (0.35, (235, 225, 140)),
@@ -231,6 +280,7 @@ def run_farm(key, f):
         fp = DOCS / p['img']
         if fp.exists(): fp.unlink()
         p['img'] = None
+    atualiza_entorno(key, f, feats, D)
     save(D, datafile)
     gj = DOCS / 'data' / f'{key}_pastos.geojson'
     gj.write_text(json.dumps(pastos, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
