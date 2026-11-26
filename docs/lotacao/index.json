@@ -1,0 +1,6 @@
+{
+ "atualizado": "2026-11-26T12:24-03:00",
+ "fazendas": [],
+ "fonte": "ControlPasto (Integrasoftware)",
+ "cifra": "AES-256-GCM; chave PBKDF2-SHA256(senha do site, \"ndvi-fazendas:lotacao\", 150000)"
+}
