@@ -623,16 +623,17 @@ async function montar3D(){
   cv.onpointermove=ev=>{const q=pega(ev);const el=$('#v3alt');if(!q){el.hidden=true;return}const a=altEm(q.lat,q.lng);const pp=pastoEm(q.lng,q.lat);
     el.hidden=a==null;el.textContent=`altitude ${fmt(a,0)} m${pp?` · ${pp.retiro} ${pp.nome}`:''} · clique para marcar ponto`};
   cv.onpointerleave=()=>$('#v3alt').hidden=true;
-  let down=null;cv.addEventListener('pointerdown',ev=>{down={x:ev.clientX,y:ev.clientY,b:ev.button,t:performance.now()}});
+  // os ouvintes saem junto com a vista (antes ficavam acumulados no mesmo canvas a cada troca de fazenda e cada clique marcava 2+ pontos, um com a câmera antiga)
+  const ac=new AbortController();let down=null;cv.addEventListener('pointerdown',ev=>{down={x:ev.clientX,y:ev.clientY,b:ev.button,t:performance.now()}},{signal:ac.signal});
   cv.addEventListener('pointerup',ev=>{if(!down||down.b!==0)return;const d=Math.hypot(ev.clientX-down.x,ev.clientY-down.y);const dt=performance.now()-down.t;down=null;
-    if(d>5||dt>600)return;const q=pega(ev);if(!q)return;const inf=pontoInfo(q.lat,q.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()});
+    if(d>5||dt>600)return;const q=pega(ev);if(!q)return;const inf=pontoInfo(q.lat,q.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()},{signal:ac.signal});
   const vec=new THREE.Vector3();
   let raf=0;const loop=()=>{raf=requestAnimationFrame(loop);ctl.update();R.render(sc,cam);
     const lb=$('#v3lbl');const r=cv.getBoundingClientRect();let h='';
     (V3?.pins||[]).forEach((p,i)=>{vec.copy(p).project(cam);if(vec.z>1)return;const x=(vec.x+1)/2*r.width,y=(1-vec.y)/2*r.height;const q=PATH[i];const last=i===PATH.length-1;
       h+=`<div class="pin${last?' last':''}" style="left:${x}px;top:${y}px"><b>${i+1}</b>${last?` ${fmt(q.z,0)} m · ${fmt(q.graus,1)}° (${fmt(q.pct,1)}%)${q.face!=='plano'?' · cai para '+q.face:''}`:''}</div>`});
     if(lb.innerHTML!==h)lb.innerHTML=h};loop();
-  V3={key,R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>cancelAnimationFrame(raf),setEx,desenhaCaminho,hov,toXYZ,THREE,pins:[]};
+  V3={key,R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>{cancelAnimationFrame(raf);ac.abort();cv.onpointermove=cv.onpointerleave=null},setEx,desenhaCaminho,hov,toXYZ,THREE,pins:[]};
   setEx(+$('#v3ex').value);legenda3D();
 }
 function legenda3D(){
