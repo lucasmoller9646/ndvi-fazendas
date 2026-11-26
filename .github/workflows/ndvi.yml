@@ -94,6 +94,13 @@ jobs:
         if: always()
         with:
           path: docs
+      # o GitHub às vezes ainda não "enxerga" o pacote recém-enviado: tenta de novo depois de 1 minuto
       - id: deploy
         if: always()
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+      - if: always() && steps.deploy.outcome == 'failure'
+        run: sleep 60
+      - id: deploy2
+        if: always() && steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
