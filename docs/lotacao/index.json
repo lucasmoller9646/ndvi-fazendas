@@ -1,6 +1,14 @@
 {
- "atualizado": "2026-11-26T12:24-03:00",
- "fazendas": [],
+ "atualizado": "2026-11-26T12:47-03:00",
+ "fazendas": [
+  "ypoti",
+  "lusipar",
+  "santa-clara",
+  "ybypora",
+  "oro-verde",
+  "la-esperanza",
+  "cerro-memby"
+ ],
  "fonte": "ControlPasto (Integrasoftware)",
  "cifra": "AES-256-GCM; chave PBKDF2-SHA256(senha do site, \"ndvi-fazendas:lotacao\", 150000)"
 }
