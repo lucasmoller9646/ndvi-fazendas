@@ -5,7 +5,7 @@ on:
     - cron: "17 15 * * *"   # todo dia às 12:17 de Assunção/Brasília (15:17 UTC)
   push:                      # roda quando muda o código ou a página
     branches: [main]
-    paths: ["ndvi/**", "docs/index.html", "config/**", ".github/workflows/ndvi.yml"]
+    paths: ["ndvi/**", "!ndvi/controlpasto.py", "docs/index.html", "config/**", ".github/workflows/ndvi.yml"]
   workflow_dispatch:         # botão "Run workflow" para rodar na hora
     inputs:
       fazendas:
