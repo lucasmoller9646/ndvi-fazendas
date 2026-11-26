@@ -7,6 +7,7 @@
 <title>NDVI das Fazendas</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
 :root{--bg:#f4f5f0;--card:#fff;--ink:#1f3438;--mut:#64757a;--line:#dfe3da;--acc:#2f7d3a;--neg:#b2482d;--pos:#2f7d3a}
 @media (prefers-color-scheme:dark){:root{--bg:#141a1b;--card:#1d2526;--ink:#e3ebe8;--mut:#93a4a6;--line:#2e3a3b;--acc:#7cc488;--neg:#e2856c;--pos:#7cc488}}
@@ -61,6 +62,23 @@ tr.sub td{font-size:12.5px;color:var(--mut)}
 #gate .go{width:100%;background:var(--acc);color:#fff;border-color:var(--acc);padding:9px;font-weight:600}
 #gerr{color:var(--neg);min-height:18px;font-size:12.5px;margin-top:8px}
 body.locked header,body.locked main{visibility:hidden}
+/* relevo */
+.clbl{background:none;border:none;box-shadow:none;color:#ffe9b8;font-weight:600;font-size:10px;padding:0;text-shadow:0 0 3px #000,0 0 2px #000,0 0 1px #000}
+.clbl:before{display:none}
+.altbox{background:rgba(18,26,27,.82);color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;font-variant-numeric:tabular-nums}
+#b3d{border-color:var(--acc);color:var(--acc);font-weight:600}
+#v3d{position:fixed;inset:0;z-index:4000;background:#0d1314;display:flex;flex-direction:column}
+#v3d[hidden]{display:none}
+.v3bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;padding:8px 14px;background:var(--card);border-bottom:1px solid var(--line)}
+.v3bar b{font-size:15px}
+.v3wrap{position:relative;flex:1;min-height:0}
+#v3c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#v3alt{position:absolute;left:12px;bottom:12px}
+#v3leg{position:absolute;right:12px;bottom:12px;width:min(300px,60vw);background:rgba(18,26,27,.82);color:#fff;border-radius:8px;padding:7px 10px;font-size:11.5px}
+#v3leg .bar{height:9px;border-radius:3px;margin:4px 0 2px}
+#v3leg .ticks{color:#cfd8d6}
+#v3tip{position:absolute;left:50%;top:10px;transform:translateX(-50%);background:rgba(18,26,27,.75);color:#e6eeec;font-size:11.5px;padding:4px 10px;border-radius:6px;pointer-events:none;white-space:nowrap}
+@media (max-width:700px){#v3tip{display:none}}
 </style>
 </head>
 <body class="locked">
@@ -85,6 +103,8 @@ body.locked header,body.locked main{visibility:hidden}
     <label class="muted" for="pal">Cores</label><select id="pal"><option value="esp">Espectro em 14 classes</option><option value="cont">Marrom–verde contínuo</option></select>
     <label class="muted"><input type="checkbox" id="opac" checked> NDVI sobre o satélite</label>
     <label class="muted" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho</label>
+    <label class="muted" id="rvl" hidden><input type="checkbox" id="curv"> Curvas de nível</label>
+    <button id="b3d" hidden title="Terreno em 3D com o NDVI da imagem selecionada">Relevo 3D</button>
     <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
       <button data-x="tif">GeoTIFF do NDVI<small>valores em cada pixel de 10 m · abre no QGIS/ArcGIS</small></button>
       <button data-x="kmz">KMZ para Google Earth<small>imagem colorida como na tela, já posicionada</small></button>
@@ -126,6 +146,21 @@ body.locked header,body.locked main{visibility:hidden}
     <div class="muted">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
   </div>
 </main>
+<div id="v3d" hidden>
+  <div class="v3bar">
+    <b id="v3tit">Relevo 3D</b>
+    <label class="muted">Exagero vertical <select id="v3ex"><option value="1">×1 (real)</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option><option value="10">×10</option></select></label>
+    <label class="muted">Cores <select id="v3tx"><option value="ndvi">NDVI da imagem</option><option value="alt">Altitude</option></select></label>
+    <label class="muted"><input type="checkbox" id="v3cv" checked> Curvas</label>
+    <label class="muted"><input type="checkbox" id="v3ps" checked> Pastos</label>
+    <label class="muted"><input type="checkbox" id="v3nm"> Nomes</label>
+    <span class="muted" id="v3info"></span>
+    <button id="v3x" style="margin-left:auto">Fechar</button>
+  </div>
+  <div class="v3wrap"><canvas id="v3c" tabindex="0" aria-label="Terreno da fazenda em 3D"></canvas>
+    <div id="v3tip">arrastar = girar · botão direito ou 2 dedos = deslocar · roda = zoom</div>
+    <div id="v3alt" class="altbox" hidden></div><div id="v3leg"></div></div>
+</div>
 <script>
 const $=s=>document.querySelector(s);
 const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -203,6 +238,7 @@ async function loadFarm(k){
   const ult=D.passagens[D.passagens.length-1];
   $('#upd').textContent=`Última passagem consultada: ${ult?fdate(ult.data):'–'}; página gerada em ${D.atualizado?.replace('T',' ').replace('Z',' UTC')}.`;
   await setDate(passImgs.length-1);
+  loadRelevo(k);
 }
 /* pastos e áreas de trabalho não aparecem juntos */
 function camadas(){const ob=OBJ&&$('#obr').checked;
@@ -402,6 +438,139 @@ async function exportar(tipo){
 }
 document.querySelectorAll('#exp .menu button').forEach(b=>b.onclick=()=>exportar(b.dataset.x));
 document.addEventListener('click',e=>{if(!e.target.closest('#exp'))$('#exp').open=false});
+
+/* ---------------- relevo: curvas de nível, altitude no cursor e vista 3D ---------------- */
+let REL=null,curvLayer=null;const curvLbl=L.layerGroup();
+map.createPane('relevo');map.getPane('relevo').style.zIndex=380;map.getPane('relevo').style.pointerEvents='none';
+const altCtl=L.control({position:'bottomleft'});altCtl.onAdd=()=>{const d=L.DomUtil.create('div','altbox');d.id='alt';d.hidden=true;return d};altCtl.addTo(map);
+$('#curv').checked=st.get('ndvi_curv')==='1';
+async function loadRelevo(k){
+  REL=null;if(curvLayer){curvLayer.remove();curvLayer=null}curvLbl.clearLayers();$('#rvl').hidden=true;$('#b3d').hidden=true;$('#alt').hidden=true;
+  let meta;try{const r=await fetch(`relevo/${k}.json`,{cache:'no-store'});if(!r.ok)return;meta=await r.json()}catch(e){return}
+  if(FKEY!==k)return;
+  let im;try{im=await loadImg(meta.dem)}catch(e){return}
+  const cv=document.createElement('canvas');cv.width=meta.W;cv.height=meta.H;const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(im,0,0);
+  const px=cx.getImageData(0,0,meta.W,meta.H).data;const z=new Float32Array(meta.W*meta.H);
+  for(let i=0,j=0;i<z.length;i++,j+=4)z[i]=meta.zmin+(px[j]*256+px[j+1])/10;
+  if(FKEY!==k)return;
+  REL={...meta,z};$('#rvl').hidden=false;$('#b3d').hidden=false;
+  $('#rvl').title=`Curvas a cada ${REL.equidistancia} m (mestras a cada ${REL.mestra} m) · ${REL.fonte}, ${REL.resolucao_m} m · altitude de ${fmt(REL.zmin,0)} a ${fmt(REL.zmax,0)} m`;
+  await curvas();
+}
+async function curvas(){
+  if(!REL)return;st.set('ndvi_curv',$('#curv').checked?'1':'0');
+  if(!$('#curv').checked){if(curvLayer)curvLayer.remove();curvLbl.clearLayers();return}
+  if(!REL.gj){const k=FKEY;const gj=await (await fetch(REL.curvas,{cache:'no-store'})).json();if(FKEY!==k||!REL)return;REL.gj=gj}
+  if(!curvLayer)curvLayer=L.geoJSON(REL.gj,{pane:'relevo',interactive:false,
+    style:f=>({color:f.properties.mestra?'#ffe2a6':'#fff3d9',weight:f.properties.mestra?1.7:0.8,opacity:f.properties.mestra?0.95:0.75})});
+  curvLayer.addTo(map);if(!map.hasLayer(curvLbl))curvLbl.addTo(map);rotulosCurvas();
+}
+function rotulosCurvas(){
+  curvLbl.clearLayers();if(!REL?.gj||!curvLayer||!map.hasLayer(curvLayer)||map.getZoom()<13)return;
+  const b=map.getBounds();const zt=map.getZoom()>=15;let n=0;
+  for(const f of REL.gj.features){if(!f.properties.mestra&&!zt)continue;const c=f.geometry.coordinates;if(c.length<5)continue;
+    const passo=Math.max(25,Math.floor(c.length/3));
+    for(let i=Math.floor(passo/2);i<c.length;i+=passo){const [x,y]=c[i];if(!b.contains([y,x]))continue;
+      curvLbl.addLayer(L.tooltip({permanent:true,direction:'center',className:'clbl',interactive:false}).setLatLng([y,x]).setContent(`${f.properties.z}`));
+      if(++n>160)return}}
+}
+function altEm(lat,lng){
+  if(!REL)return null;const [w,s,e,n]=REL.bbox,W=REL.W,H=REL.H,Z=REL.z;
+  const u=(lng-w)/(e-w)*W-0.5,v=(n-lat)/(n-s)*H-0.5;if(u<-0.5||v<-0.5||u>W-0.5||v>H-0.5)return null;
+  const i=Math.max(0,Math.min(W-2,Math.floor(u))),j=Math.max(0,Math.min(H-2,Math.floor(v))),fu=Math.max(0,Math.min(1,u-i)),fv=Math.max(0,Math.min(1,v-j));
+  return (Z[j*W+i]*(1-fu)+Z[j*W+i+1]*fu)*(1-fv)+(Z[(j+1)*W+i]*(1-fu)+Z[(j+1)*W+i+1]*fu)*fv}
+map.on('mousemove',e=>{const a=altEm(e.latlng.lat,e.latlng.lng);const el=$('#alt');if(!el)return;if(a==null){el.hidden=true;return}el.hidden=false;el.textContent=`altitude ${fmt(a,0)} m`});
+map.on('mouseout',()=>{const el=$('#alt');if(el)el.hidden=true});
+map.on('moveend',rotulosCurvas);
+$('#curv').onchange=curvas;
+
+/* ---- 3D ---- */
+const HIPSO=[[0,[47,104,66]],[0.3,[118,160,84]],[0.55,[201,194,122]],[0.78,[178,132,82]],[1,[236,230,222]]];
+function hipso(t){t=Math.max(0,Math.min(1,t));for(let k=1;k<HIPSO.length;k++)if(t<=HIPSO[k][0]){const [a,ca]=HIPSO[k-1],[b,cb]=HIPSO[k];const f=(t-a)/(b-a);return ca.map((c,i)=>c+(cb[i]-c)*f)}return HIPSO[HIPSO.length-1][1]}
+function dimsM(){const [w,s,e,n]=REL.bbox;const lat=(s+n)/2;return [(e-w)*111320*Math.cos(lat*Math.PI/180),(n-s)*110570]}
+function imgAltitude(){ // altitude em cores com sombreado (luz de noroeste)
+  const {W,H,z,zmin,zmax}=REL;const [WM,HM]=dimsM();const dx=WM/W,dy=HM/H;const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const cx=cv.getContext('2d');const o=cx.createImageData(W,H);const d=o.data;const rg=Math.max(1,zmax-zmin);
+  const az=315*Math.PI/180,alt=45*Math.PI/180,zf=3;
+  for(let j=0;j<H;j++)for(let i=0;i<W;i++){const k=j*W+i;
+    const zl=z[j*W+Math.max(0,i-1)],zr=z[j*W+Math.min(W-1,i+1)],zu=z[Math.max(0,j-1)*W+i],zd=z[Math.min(H-1,j+1)*W+i];
+    const gx=(zr-zl)/(2*dx)*zf,gy=(zd-zu)/(2*dy)*zf;const sl=Math.atan(Math.hypot(gx,gy));const asp=Math.atan2(gy,-gx);
+    const sh=Math.max(0,Math.sin(alt)*Math.cos(sl)+Math.cos(alt)*Math.sin(sl)*Math.cos(az-Math.PI/2-asp));
+    const c=hipso((z[k]-zmin)/rg);const m=0.62+0.48*sh;d[k*4]=c[0]*m;d[k*4+1]=c[1]*m;d[k*4+2]=c[2]*m;d[k*4+3]=255}
+  cx.putImageData(o,0,0);return cv}
+function textura3D(modo){
+  const [w,s,e,n]=REL.bbox;const [WM,HM]=dimsM();const TW=2048,TH=Math.min(4096,Math.round(TW*HM/WM));
+  const cv=document.createElement('canvas');cv.width=TW;cv.height=TH;const cx=cv.getContext('2d');
+  cx.imageSmoothingEnabled=true;cx.drawImage(REL.altImg||(REL.altImg=imgAltitude()),0,0,TW,TH);
+  if(modo==='ndvi'&&RAST?.canvas)cx.drawImage(RAST.canvas,0,0,TW,TH);
+  const X=x=>(x-w)/(e-w)*TW,Y=y=>(n-y)/(n-s)*TH;const kpx=TW/WM*30; // ~30 m em pixels
+  if($('#v3cv').checked&&REL.gj){for(const f of REL.gj.features){const c=f.geometry.coordinates;cx.beginPath();c.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));
+      cx.lineWidth=f.properties.mestra?Math.max(1.6,kpx*0.12):Math.max(0.8,kpx*0.05);
+      cx.strokeStyle=modo==='ndvi'?(f.properties.mestra?'rgba(255,236,190,.95)':'rgba(255,248,230,.6)'):(f.properties.mestra?'rgba(70,45,20,.85)':'rgba(70,45,20,.45)');cx.stroke()}}
+  if($('#v3ps').checked&&GJ){cx.strokeStyle='rgba(255,255,255,.95)';cx.lineWidth=Math.max(1.5,kpx*0.1);cx.lineJoin='round';
+    for(const f of GJ.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+      for(const p of polys)for(const ring of p){cx.beginPath();ring.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));cx.closePath();cx.stroke()}}}
+  if($('#v3nm').checked&&GJ){const fs=Math.round(Math.max(12,Math.min(26,TW/90)));cx.font=`600 ${fs}px system-ui,sans-serif`;cx.textAlign='center';cx.textBaseline='middle';
+    for(const f of GJ.features){const b=L.geoJSON(f).getBounds().getCenter();cx.lineWidth=fs/4;cx.strokeStyle='rgba(0,0,0,.75)';cx.strokeText(f.properties.nome,X(b.lng),Y(b.lat));cx.fillStyle='#fff';cx.fillText(f.properties.nome,X(b.lng),Y(b.lat))}}
+  return cv}
+let V3=null;
+async function abrir3D(){
+  if(!REL)return;
+  if(!REL.gj){try{REL.gj=await (await fetch(REL.curvas,{cache:'no-store'})).json()}catch(e){}}
+  $('#v3d').hidden=false;$('#v3tit').textContent='Relevo 3D — '+D.fazenda;
+  $('#v3tx').querySelector('[value=ndvi]').disabled=!RAST;if(!RAST)$('#v3tx').value='alt';
+  if(!st.get('ndvi_v3ex'))$('#v3ex').value=(REL.zmax-REL.zmin)<80?'5':'3';else $('#v3ex').value=st.get('ndvi_v3ex');
+  let THREE,OrbitControls;
+  try{THREE=await import('three');({OrbitControls}=await import('three/addons/controls/OrbitControls.js'))}
+  catch(e){$('#v3info').textContent='Não foi possível carregar o 3D neste navegador.';return}
+  const cv=$('#v3c');const R=new THREE.WebGLRenderer({canvas:cv,antialias:true});R.setPixelRatio(Math.min(devicePixelRatio,2));R.outputColorSpace=THREE.SRGBColorSpace;
+  const sc=new THREE.Scene();sc.background=new THREE.Color(0x0d1314);
+  const [WM,HM]=dimsM();const nx=Math.min(REL.W,420),ny=Math.max(2,Math.round(nx*REL.H/REL.W));
+  const g=new THREE.PlaneGeometry(WM,HM,nx-1,ny-1);g.rotateX(-Math.PI/2);const P=g.attributes.position;
+  const [w,s,e,n]=REL.bbox;const hs=new Float32Array(nx*ny);
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const lng=w+(e-w)*i/(nx-1),lat=n-(n-s)*j/(ny-1);hs[j*nx+i]=(altEm(Math.min(n,Math.max(s,lat)),Math.min(e,Math.max(w,lng)))??REL.zmin)-REL.zmin}
+  const tex=new THREE.CanvasTexture(textura3D($('#v3tx').value));tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=R.capabilities.getMaxAnisotropy();
+  const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0}));sc.add(mesh);
+  // saia (laterais do bloco)
+  const sk=new THREE.BufferGeometry();const borda=[];for(let i=0;i<nx;i++)borda.push(i);for(let j=1;j<ny;j++)borda.push(j*nx+nx-1);for(let i=nx-2;i>=0;i--)borda.push((ny-1)*nx+i);for(let j=ny-2;j>=0;j--)borda.push(j*nx);
+  const skP=new Float32Array(borda.length*6);sk.setAttribute('position',new THREE.BufferAttribute(skP,3));
+  const idx=[];for(let k=0;k<borda.length-1;k++){const a=2*k,b=2*k+1,c=2*k+2,d=2*k+3;idx.push(a,c,b,b,c,d)}sk.setIndex(idx);
+  const skirt=new THREE.Mesh(sk,new THREE.MeshStandardMaterial({color:0x5b4632,roughness:1,side:THREE.DoubleSide}));sc.add(skirt);
+  const base=Math.max(20,(REL.zmax-REL.zmin)*0.25);
+  function setEx(ex){for(let k=0;k<hs.length;k++)P.setY(k,hs[k]*ex);P.needsUpdate=true;g.computeVertexNormals();g.computeBoundingSphere();
+    borda.forEach((v,k)=>{skP.set([P.getX(v),P.getY(v),P.getZ(v),P.getX(v),-base*ex,P.getZ(v)],k*6)});sk.attributes.position.needsUpdate=true;sk.computeVertexNormals();sk.computeBoundingSphere()}
+  setEx(+$('#v3ex').value);
+  sc.add(new THREE.HemisphereLight(0xffffff,0x3a4a3c,1.05));const sun=new THREE.DirectionalLight(0xfff4e0,1.7);sun.position.set(-0.7,1,-0.7).multiplyScalar(Math.max(WM,HM));sc.add(sun);
+  const cam=new THREE.PerspectiveCamera(38,1,Math.max(WM,HM)/2000,Math.max(WM,HM)*20);const D0=Math.max(WM,HM);cam.position.set(D0*0.12,D0*0.62,D0*1.02);
+  const ctl=new OrbitControls(cam,cv);ctl.enableDamping=true;ctl.dampingFactor=0.08;ctl.maxPolarAngle=Math.PI*0.48;ctl.minDistance=D0*0.03;ctl.maxDistance=D0*3;ctl.target.set(0,(REL.zmax-REL.zmin)*0.3,0);
+  function tam(){const r=cv.parentElement.getBoundingClientRect();R.setSize(r.width,r.height,false);cam.aspect=r.width/Math.max(1,r.height);cam.updateProjectionMatrix()}
+  const ro=new ResizeObserver(tam);ro.observe(cv.parentElement);tam();
+  const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
+  cv.onpointermove=ev=>{const r=cv.getBoundingClientRect();mv.set((ev.clientX-r.left)/r.width*2-1,-(ev.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
+    const hit=ray.intersectObject(mesh)[0];const el=$('#v3alt');if(!hit){el.hidden=true;return}
+    const lng=w+(hit.point.x+WM/2)/WM*(e-w),lat=n-(hit.point.z+HM/2)/HM*(n-s);const a=altEm(lat,lng);
+    let pasto='';if(GJ){const pt=[lng,lat];for(const f of GJ.features)if(dentro(pt,f.geometry)){pasto=` · ${f.properties.retiro} ${f.properties.nome}`;break}}
+    el.hidden=a==null;el.textContent=`altitude ${fmt(a,0)} m${pasto}`};
+  cv.onpointerleave=()=>$('#v3alt').hidden=true;
+  let raf=0;const loop=()=>{raf=requestAnimationFrame(loop);ctl.update();R.render(sc,cam)};loop();
+  V3={R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>cancelAnimationFrame(raf),setEx,THREE};
+  legenda3D();
+}
+function dentro([x,y],g){const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
+  for(const p of polys){let ins=false;for(const ring of p)for(let i=0,j=ring.length-1;i<ring.length;j=i++){const [xi,yi]=ring[i],[xj,yj]=ring[j];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)ins=!ins}if(ins)return true}return false}
+function legenda3D(){
+  const modo=$('#v3tx').value;const rg=REL.zmax-REL.zmin;
+  $('#v3info').textContent=`${REL.fonte} (${REL.resolucao_m} m) · altitude ${fmt(REL.zmin,0)}–${fmt(REL.zmax,0)} m · curvas a cada ${REL.equidistancia} m`+(modo==='ndvi'&&RAST?` · NDVI de ${fdate(RAST.data)}`:'');
+  if(modo==='ndvi'&&RAST){$('#v3leg').innerHTML=`NDVI ${fdate(RAST.data)} (${$('#esc').value==='fixa'?'escala fixa':'máximo contraste'})<div class="bar" style="background:${$('#bar').style.background}"></div><div class="ticks">${$('#ticks').innerHTML}</div>`}
+  else{$('#v3leg').innerHTML=`Altitude (m)<div class="bar" style="background:linear-gradient(90deg,${HIPSO.map(([t,c])=>`rgb(${c}) ${t*100}%`).join(',')})"></div><div class="ticks">${[0,.25,.5,.75,1].map(t=>`<span>${fmt(REL.zmin+rg*t,0)}</span>`).join('')}</div>`}
+}
+function retex3D(){if(!V3)return;const T=V3.THREE;const t=new T.CanvasTexture(textura3D($('#v3tx').value));t.colorSpace=T.SRGBColorSpace;t.anisotropy=V3.R.capabilities.getMaxAnisotropy();
+  V3.mesh.material.map.dispose();V3.mesh.material.map=t;V3.mesh.material.needsUpdate=true;legenda3D()}
+function fechar3D(){if(V3){V3.stop();V3.ro.disconnect();V3.ctl.dispose();V3.g.dispose();V3.sk.dispose();V3.mesh.material.map.dispose();V3.R.dispose();V3=null}$('#v3d').hidden=true}
+$('#b3d').onclick=abrir3D;$('#v3x').onclick=fechar3D;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#v3d').hidden)fechar3D()});
+$('#v3ex').onchange=()=>{st.set('ndvi_v3ex',$('#v3ex').value);if(V3)V3.setEx(+$('#v3ex').value)};
+['#v3tx','#v3cv','#v3ps','#v3nm'].forEach(s=>$(s).onchange=retex3D);
 
 $('#data').onchange=()=>setDate(+$('#data').value);
 $('#prev').onclick=()=>setDate(Math.max(0,+$('#data').value-1));
