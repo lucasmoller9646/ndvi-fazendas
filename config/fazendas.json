@@ -72,11 +72,12 @@
     "mapas_guardados": 45
   },
   "luna-blanca": {
-    "nome": "Luna Blanca",
+    "nome": "Bella Vista (Luna Blanca)",
     "pastos": "config/luna-blanca_pastos.geojson",
     "inicio": "2026-06-01",
     "min_limpo_mapa": 0.6,
-    "mapas_guardados": 45
+    "mapas_guardados": 45,
+    "limite": "config/luna-blanca_limite.geojson"
   },
   "cielo-azul": {
     "nome": "Cielo Azul",

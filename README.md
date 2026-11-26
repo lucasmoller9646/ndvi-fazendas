@@ -41,7 +41,7 @@ Sentinel-2 e ○ é Landsat. Para desligar o Landsat numa fazenda, use `"landsat
 | la-esperanza | La Esperanza | 138 pastos com nome | 01/11/2025 |
 | ita-vera | Ita Vera | 33 pastos | 01/06/2026 |
 | cerro-memby | Cerro Memby | 51 pastos + sede | 01/06/2026 |
-| luna-blanca | Luna Blanca | fazenda inteira | 01/06/2026 |
+| luna-blanca | Bella Vista (Luna Blanca) | 89 pastos (blocos A e C, central e sede) + contorno da fazenda | 01/06/2026 |
 | cielo-azul | Cielo Azul | fazenda inteira (rascunho) | 01/06/2026 |
 | santa-maria | Santa María | limite legal inteiro | 01/06/2026 |
 
