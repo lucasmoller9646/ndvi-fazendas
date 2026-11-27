@@ -28,6 +28,36 @@ As duas fontes usam reflectância de superfície corrigida da atmosfera, então 
 0,01–0,02). Quando os dois satélites passam no mesmo dia, fica a imagem do Sentinel-2. No gráfico da série, ● é
 Sentinel-2 e ○ é Landsat. Para desligar o Landsat numa fazenda, use `"landsat": false` em `config/fazendas.json`.
 
+## Como usar a página
+
+A página tem três partes, cada uma com seu papel:
+
+- **Barra do topo:** escolhe a fazenda e a data da imagem de satélite. A data só vale para o NDVI e fica apagada nos outros
+  modos. Também tem o menu **Exportar**.
+- **Sobre o mapa, à esquerda:** escolhe o que as cores mostram, que é **NDVI**, **Lotação** (hoje ou média de 12 meses) ou
+  **Relevo**. A legenda dessas cores fica no canto inferior esquerdo.
+- **Sobre o mapa, à direita:** fica a vista **2D | 3D** e o botão **Perfil**, que liga a medição de altitude e declive por
+  cliques. Ao lado, **Camadas** reúne tudo o que liga e desliga:
+  - satélite de fundo;
+  - contorno dos pastos;
+  - nomes;
+  - curvas de nível;
+  - áreas de trabalho;
+  - intensidade das cores;
+  - nas opções do NDVI: pixel a pixel ou média do pasto, escala e paleta;
+  - no 3D: exagero do relevo.
+
+  Tudo isso vale igual em 2D e 3D. O zoom fica sempre no canto inferior direito.
+
+O painel ao lado do mapa rola sozinho, sem mexer no mapa:
+
+- **Visão geral:** números, gráficos e ControlPasto da fazenda ou do pasto selecionado.
+- **Pastos:** a lista, com o filtro de retiro.
+- **Perfil:** aparece quando a medição está ligada.
+- **Áreas de trabalho:** só nas fazendas que têm.
+
+Clicar num pasto, no mapa ou na lista, seleciona o pasto. O nome dele aparece no alto do painel com um × para desmarcar.
+
 ## Fazendas
 
 | Chave | Fazenda | Unidades | Histórico desde |
@@ -67,17 +97,17 @@ altitude mínima e máxima. A equidistância das curvas é escolhida pelo desní
 mestra a cada cinco. Como o relevo não muda, cada fazenda só é processada uma vez (ou de novo com `RELEVO_FORCE=1`, ou se o
 retângulo mudar); fazenda nova ganha o relevo na primeira execução do workflow.
 
-Na página: **Curvas de nível** liga as curvas sobre o mapa (rótulos a partir do zoom 13) e o canto inferior esquerdo mostra a
-altitude sob o cursor. **Mapa | 3D** troca a vista: em 3D o terreno da fazenda aparece com o NDVI da imagem selecionada ou com cores de
-altitude, as curvas, os pastos e os nomes, com exagero vertical de 1 a 10 vezes; a fazenda, a imagem, a escala e as cores
-do topo continuam valendo. Cada clique no terreno marca um ponto com a altitude e o declive (graus e %, e para onde o
-terreno cai); com dois ou mais pontos o painel lateral mostra o perfil do caminho (comprimento, subida e descida
-acumuladas, declive máximo em trechos de 30 m e declive médio), que pode ser exportado em CSV. O DEM de 30 m mede a superfície (inclui a altura das
+Na página, **Relevo** pinta o terreno pelas cores de altitude e a lista de pastos passa a mostrar a altitude média, o
+desnível e o declive médio de cada um. **Curvas de nível** fica em Camadas, e a altitude sob o cursor aparece na faixa do
+topo do mapa. A vista **3D** mostra o mesmo que o 2D (NDVI, lotação ou relevo, com contornos, nomes e curvas), com exagero
+vertical de 1 a 10 vezes. Com **Perfil** ligado, cada clique no terreno (em 2D ou 3D) marca um ponto com a altitude e o
+declive (graus e %, e para onde o terreno cai). Com dois ou mais pontos, a aba Perfil mostra o perfil do caminho
+(comprimento, subida e descida acumuladas, declive máximo em trechos de 30 m e declive médio), que pode ser exportado em CSV. O DEM de 30 m mede a superfície (inclui a altura das
 matas), com erro vertical típico de 2 a 4 m: serve para planejar e orientar, não substitui levantamento topográfico.
 
 ## Lotação dos pastos (ControlPasto)
 
-No seletor **Mostrar** da página, além do NDVI, há **Lotação hoje** e **Lotação média 12 meses**: cada pasto é pintado
+Em **Lotação** (sobre o mapa), com **Hoje** ou **Média 12 meses**: cada pasto é pintado
 pela carga em UA/ha (UA = 450 kg de peso vivo), num mapa de calor que vai do amarelo-claro (baixa) ao vermelho-escuro
 (3 UA/ha ou mais). Azul é pasto descansando, sem animais. A tabela lateral passa a mostrar os lotes, as cabeças e as
 duas lotações de cada pasto.

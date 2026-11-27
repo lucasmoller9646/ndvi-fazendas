@@ -4,27 +4,122 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>NDVI das Fazendas</title>
+<title>Fazendas — NDVI, lotação e relevo</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
 <style>
-:root{--bg:#f4f5f0;--card:#fff;--ink:#1f3438;--mut:#64757a;--line:#dfe3da;--acc:#2f7d3a;--neg:#b2482d;--pos:#2f7d3a}
+:root{--bg:#f4f5f0;--card:#fff;--ink:#1f3438;--mut:#64757a;--line:#dfe3da;--acc:#2f7d3a;--neg:#b2482d;--pos:#2f7d3a;--ov:rgba(16,23,24,.84);--ovl:rgba(255,255,255,.16);--ovt:#eef3f1}
 @media (prefers-color-scheme:dark){:root{--bg:#141a1b;--card:#1d2526;--ink:#e3ebe8;--mut:#93a4a6;--line:#2e3a3b;--acc:#7cc488;--neg:#e2856c;--pos:#7cc488}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-header{padding:14px 18px 10px;display:flex;flex-wrap:wrap;gap:10px 22px;align-items:flex-end;border-bottom:1px solid var(--line)}
-h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
-.sub{color:var(--mut);font-size:12.5px}
-.ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column}
 select,button,input{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:7px;padding:5px 8px}
 button{cursor:pointer}
-main{display:grid;grid-template-columns:minmax(0,1fr) 440px;gap:14px;padding:14px 18px}
-@media (max-width:980px){main{grid-template-columns:1fr;padding:12px 16px}}
-#map{height:calc(100vh - 130px);min-height:420px;border-radius:10px;border:1px solid var(--line)}
-@media (max-width:980px){#map{height:62vh}}
+button:disabled,select:disabled{opacity:.45;cursor:not-allowed}
+[hidden]{display:none!important}
+.muted{color:var(--mut);font-size:12px}
+.neg{color:var(--neg)}.pos{color:var(--pos)}
+/* barra do topo: o que estou vendo (fazenda e data) */
+.top{display:flex;align-items:center;gap:10px 14px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--card)}
+.brand{font-weight:700;font-size:15px;letter-spacing:.2px;white-space:nowrap}
+#faz{font-weight:650;font-size:15px;padding:6px 10px}
+.datebox{display:inline-flex;align-items:center;gap:4px}
+.datebox button{padding:5px 10px}
+.datebox.off{opacity:.45;pointer-events:none}
+#sub{flex:1 1 260px;color:var(--mut);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* corpo: mapa à esquerda, painel à direita; cada um rola sozinho */
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 420px;min-height:0}
+#vista{position:relative;min-height:0;background:#0d1314}
+#map{position:absolute;inset:0}
+.side{overflow:auto;border-left:1px solid var(--line);padding:0 14px 14px;display:flex;flex-direction:column;gap:12px}
+@media (max-width:900px){
+  body{display:block;height:auto}
+  main{display:block}
+  #vista{height:62svh;min-height:380px}
+  .side{border-left:0;overflow:visible;padding:0 12px 16px}
+  #sub{flex-basis:100%;white-space:normal;order:5}
+  .brand{display:none}
+  #faz{flex:1}
+  .exp{order:2;margin-left:0}
+  .datebox{order:3;flex-basis:100%}
+  .datebox select{flex:1}
+}
+/* controles sobre o mapa (iguais em 2D e 3D) */
+.ov{position:absolute;z-index:1000;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;pointer-events:none}
+.ov>*{pointer-events:auto}
+.ov.tl{left:10px;top:10px;right:200px}
+.ov.tr{right:10px;top:10px;justify-content:flex-end}
+.chip,.ov .seg,.ov summary,.zbtn button{background:var(--ov);color:var(--ovt);border:1px solid var(--ovl);border-radius:8px;backdrop-filter:blur(4px)}
+.seg{display:inline-flex;overflow:hidden;border-radius:8px}
+.seg button{border:0;border-radius:0;background:transparent;color:inherit;padding:6px 12px;font-weight:600;font-size:13px}
+.seg button+button{border-left:1px solid var(--ovl)}
+.seg button[aria-pressed="true"]{background:#f4f7f5;color:#13201f}
+.seg.sub button{padding:4px 10px;font-size:12px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;font-weight:600;font-size:13px}
+.chip[aria-pressed="true"]{background:#ffd400;color:#111;border-color:#ffd400}
+.chip svg{width:16px;height:16px;flex:none}
+.pop{position:relative}
+.pop>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:6px 11px;font-weight:600;font-size:13px}
+.pop>summary::-webkit-details-marker{display:none}
+.pop .menu{position:absolute;right:0;top:calc(100% + 6px);width:290px;max-height:calc(100% + 400px);background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.28);padding:10px 12px;font-size:13px}
+.menu h4{margin:10px 0 5px;font-size:11.5px;color:var(--mut);font-weight:600}
+.menu h4:first-child{margin-top:0}
+.menu label.row{display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer}
+.menu label.row input{margin:0;padding:0;width:16px;height:16px}
+.menu label.row small{color:var(--mut);margin-left:auto}
+.menu .seg{border:1px solid var(--line)}
+.menu .seg button{color:var(--ink);font-weight:500;font-size:12.5px;padding:4px 9px}
+.menu .seg button+button{border-left:1px solid var(--line)}
+.menu .seg button[aria-pressed="true"]{background:var(--acc);color:#fff}
+.menu select{width:100%}
+.menu input[type=range]{width:100%;padding:0;border:0;accent-color:var(--acc)}
+.menu .lin{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:4px 0}
+/* legenda, leitura do cursor e zoom */
+#leg{position:absolute;z-index:1000;left:10px;bottom:10px;width:min(330px,calc(100% - 80px));background:var(--ov);color:var(--ovt);border-radius:9px;padding:8px 11px;font-size:12px}
+#leg b{font-size:12.5px}
+#leg .bar{height:10px;border-radius:3px;margin:5px 0 2px}
+#leg .ticks{display:flex;justify-content:space-between;color:#c9d4d1;font-size:11px;font-variant-numeric:tabular-nums}
+#leg .nota{color:#c9d4d1;font-size:11px;margin-top:3px}
+#hud{position:absolute;z-index:1000;left:50%;transform:translateX(-50%);top:58px;background:var(--ov);color:var(--ovt);border-radius:8px;padding:5px 11px;font-size:12.5px;white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums}
+#hud[hidden]{display:none}
+@media (max-width:900px){#hud{top:auto;bottom:96px;white-space:normal;text-align:center;width:max-content;max-width:calc(100% - 24px)}}
+.zbtn{position:absolute;z-index:1000;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zbtn button{width:36px;height:36px;padding:0;font-size:18px;line-height:1}
+.leaflet-bottomright .leaflet-control-zoom{margin:0 10px 10px 0;border:0}
+.leaflet-control-zoom a{background:var(--ov)!important;color:var(--ovt)!important;border-color:var(--ovl)!important;width:36px!important;height:36px!important;line-height:36px!important}
+.leaflet-container{background:#0d1314}
+.leaflet-container.medindo,.medindo #v3c{cursor:crosshair}
+.lbl{background:none;border:none;box-shadow:none;color:#fff;font-weight:600;font-size:10.5px;text-shadow:0 0 3px #000,0 0 2px #000;text-align:center}
+.lbl:before{display:none}
+.clbl{background:none;border:none;box-shadow:none;color:#ffe9b8;font-weight:600;font-size:10px;padding:0;text-shadow:0 0 3px #000,0 0 2px #000,0 0 1px #000}
+.clbl:before{display:none}
+.pin{position:absolute;transform:translate(-50%,-130%);background:#ffd400;color:#111;font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.pin.last{background:#fff}
+.pin2d{background:none;border:0}
+.pin2d span{display:inline-block;transform:translate(-50%,-50%);background:#ffd400;color:#111;font-size:11px;font-weight:700;min-width:20px;height:20px;line-height:20px;text-align:center;border-radius:10px;border:1.5px solid #111;padding:0 4px}
+/* 3D */
+#v3{position:absolute;inset:0;overflow:hidden;background:#0d1314}
+#v3[hidden]{display:none}
+#v3c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+#v3lbl{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#v3msg[hidden]{display:none}
+#v3msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e6eeec;padding:20px;text-align:center}
+#z3[hidden]{display:none}
+/* painel */
+.ptop{position:sticky;top:0;z-index:5;background:var(--bg);padding:10px 0 8px;display:flex;flex-direction:column;gap:8px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line)}
+.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:7px 10px;font-weight:600;color:var(--mut)}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--acc)}
+.ctx{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ctx label{display:inline-flex;gap:6px;align-items:center;color:var(--mut);font-size:12.5px}
+#selchip{display:inline-flex;gap:6px;align-items:center;background:color-mix(in srgb,var(--acc) 14%,var(--card));border:1px solid color-mix(in srgb,var(--acc) 40%,transparent);border-radius:16px;padding:3px 4px 3px 10px;font-weight:600;font-size:12.5px}
+#selchip button{border:0;background:none;padding:0 6px;font-size:15px;line-height:1;color:var(--mut)}
+#selchip[hidden]{display:none}
+.tab[hidden]{display:none}
+.tab{display:flex;flex-direction:column;gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.side{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card[hidden]{display:none}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
 .kpi span{color:var(--mut);font-size:11.5px}
@@ -34,20 +129,14 @@ th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
 th{font-size:11.5px;color:var(--mut);font-weight:600;cursor:pointer;position:sticky;top:0;background:var(--card)}
 tbody tr{cursor:pointer}tbody tr:hover{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 tr.sel{background:color-mix(in srgb,var(--acc) 15%,transparent)!important}
-.tw{max-height:46vh;overflow:auto}
-.neg{color:var(--neg)}.pos{color:var(--pos)}
-.leg{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--mut)}
-.bar{height:10px;flex:1;border-radius:3px}
-.ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--mut);margin:3px 0 0;font-variant-numeric:tabular-nums}
+.tw{overflow:auto}
 .chart svg{width:100%;height:170px;display:block}
-.muted{color:var(--mut);font-size:12px}
-.leaflet-container{background:#0d1314}
-.lbl{background:none;border:none;box-shadow:none;color:#fff;font-weight:600;font-size:10.5px;text-shadow:0 0 3px #000,0 0 2px #000}
-.lbl:before{display:none}
+.hdr{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
 tr.sub td{font-size:12.5px;color:var(--mut)}
 #obtb tr{cursor:default}
+.dica{color:var(--mut);font-size:12.5px;background:color-mix(in srgb,var(--acc) 7%,var(--card));border:1px dashed color-mix(in srgb,var(--acc) 40%,transparent);border-radius:8px;padding:8px 10px}
 /* exportar */
-.exp{position:relative}
+.exp{position:relative;margin-left:auto}
 .exp>summary{list-style:none;cursor:pointer;border:1px solid var(--acc);color:var(--acc);border-radius:7px;padding:5px 10px;font-weight:600}
 .exp>summary::-webkit-details-marker{display:none}
 .exp .menu{position:absolute;right:0;top:calc(100% + 4px);z-index:1200;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;min-width:290px}
@@ -61,45 +150,17 @@ tr.sub td{font-size:12.5px;color:var(--mut)}
 #pin{font-size:28px;letter-spacing:12px;text-align:center;width:100%;padding:10px 6px;margin:16px 0 10px;font-variant-numeric:tabular-nums}
 #gate .go{width:100%;background:var(--acc);color:#fff;border-color:var(--acc);padding:9px;font-weight:600}
 #gerr{color:var(--neg);min-height:18px;font-size:12.5px;margin-top:8px}
-body.locked header,body.locked main{visibility:hidden}
-/* relevo */
-.clbl{background:none;border:none;box-shadow:none;color:#ffe9b8;font-weight:600;font-size:10px;padding:0;text-shadow:0 0 3px #000,0 0 2px #000,0 0 1px #000}
-.clbl:before{display:none}
-.altbox{background:rgba(18,26,27,.82);color:#fff;font-size:12px;padding:3px 8px;border-radius:6px;font-variant-numeric:tabular-nums}
-.seg{display:inline-flex;border:1px solid var(--acc);border-radius:7px;overflow:hidden}
-.seg button{border:0;border-radius:0;padding:5px 12px;color:var(--acc);font-weight:600;background:var(--card)}
-.seg button[aria-pressed="true"]{background:var(--acc);color:#fff}
-#vista{position:relative;min-width:0;align-self:start}
-#v3{position:absolute;inset:0;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#0d1314}
-#v3[hidden]{display:none}
-#v3c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
-.v3bar{position:absolute;left:10px;top:10px;right:10px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;pointer-events:none}
-.v3bar>*{pointer-events:auto}
-.v3bar label{background:rgba(18,26,27,.8);color:#e6eeec;font-size:12px;padding:3px 8px;border-radius:7px;display:inline-flex;gap:5px;align-items:center}
-.v3bar select{padding:2px 4px;font-size:12px}
-.v3bar button{font-size:12px;padding:4px 9px;background:rgba(18,26,27,.8);color:#e6eeec;border-color:rgba(255,255,255,.25)}
-#v3lbl{position:absolute;inset:0;pointer-events:none;overflow:hidden}
-.pin{position:absolute;transform:translate(-50%,-130%);background:#ffd400;color:#111;font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:10px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.5)}
-.pin.last{background:#fff}
-#v3tip{position:absolute;left:50%;top:48px;transform:translateX(-50%);background:rgba(18,26,27,.75);color:#e6eeec;font-size:11.5px;padding:4px 10px;border-radius:6px;pointer-events:none;white-space:nowrap}
-#v3msg[hidden]{display:none}
-#v3msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#e6eeec;padding:20px;text-align:center}
-#v3alt{position:absolute;left:10px;bottom:44px}
-#v3leg{position:absolute;right:10px;bottom:44px;width:min(300px,60%);background:rgba(18,26,27,.82);color:#fff;border-radius:8px;padding:7px 10px;font-size:11.5px}
-#v3leg .bar{height:9px;border-radius:3px;margin:4px 0 2px}
-#v3leg .ticks{color:#cfd8d6}
-#v3info{position:absolute;left:10px;bottom:10px;color:#cfd8d6;font-size:11px;text-shadow:0 0 3px #000;max-width:45%}
-@media (max-width:700px){#v3tip,#v3info{display:none}}
+body.locked .top,body.locked main{visibility:hidden}
 /* lotação (ControlPasto) */
-#cam:disabled{opacity:.55}
 .lotes td,.lotes th{font-size:12.5px}
 .movs{max-height:280px;overflow:auto;margin-top:6px}
 .movs td{font-size:12px}.movs tr{cursor:default}
 .op{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
-#cpcard h3{font-size:14px;margin:0}
-#cpcard .kpis{margin:8px 0}
+#cpcard h3,#relcard h3{font-size:14px;margin:0}
+#cpcard .kpis,#relcard .kpis{margin:8px 0}
 #cpcard .chart svg{height:150px}
 .aviso{background:color-mix(in srgb,#e0a100 14%,transparent);border-radius:7px;padding:6px 9px;font-size:12.5px;margin-top:8px}
+@media (max-width:640px){.ov.tl{right:10px}.ov.tr{top:56px}.seg button{padding:6px 9px}.pop .menu{right:0;width:min(290px,calc(100vw - 24px));max-height:60svh;overflow:auto}}
 </style>
 </head>
 <body class="locked">
@@ -113,84 +174,124 @@ body.locked header,body.locked main{visibility:hidden}
     <div id="gerr" role="alert"></div>
   </form>
 </div>
-<header>
-  <div><h1 id="titulo">NDVI</h1><div class="sub" id="sub">carregando…</div></div>
-  <div class="ctl">
-    <label class="muted" for="faz">Fazenda</label><select id="faz"></select>
-    <label class="muted" for="cam">Mostrar</label><select id="cam"><option value="ndvi">NDVI</option><option value="hoje">Lotação hoje (ControlPasto)</option><option value="m12">Lotação média 12 meses</option></select>
-    <label class="muted" for="data">Imagem</label>
-    <button id="prev" aria-label="Imagem anterior">‹</button><select id="data"></select><button id="next" aria-label="Próxima imagem">›</button>
-    <label class="muted" for="ret">Retiro</label><select id="ret"><option value="">Todos</option></select>
-    <label class="muted" for="esc">Escala</label><select id="esc"><option value="max">Máximo contraste</option><option value="fixa">Fixa (−0,2 a 0,95)</option></select>
-    <label class="muted" for="pal">Cores</label><select id="pal"><option value="esp">Espectro em 14 classes</option><option value="cont">Marrom–verde contínuo</option></select>
-    <label class="muted"><input type="checkbox" id="opac" checked> NDVI sobre o satélite</label>
-    <label class="muted" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho</label>
-    <label class="muted" id="rvl" hidden><input type="checkbox" id="curv"> Curvas de nível</label>
-    <span class="seg" id="vsw" role="group" aria-label="Vista"><button data-v="mapa" aria-pressed="true">Mapa</button><button data-v="3d" aria-pressed="false" title="Terreno em 3D com o NDVI da imagem selecionada ou a altitude">3D</button></span>
-    <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
-      <button data-x="tif">GeoTIFF do NDVI<small>valores em cada pixel de 10 m · abre no QGIS/ArcGIS</small></button>
-      <button data-x="kmz">KMZ para Google Earth<small>imagem colorida como na tela, já posicionada</small></button>
-      <button data-x="png">PNG colorido + georreferência<small>.png + .pgw + .prj em um .zip (QGIS)</small></button>
-      <button data-x="csv">Tabela dos pastos — esta imagem (CSV)</button>
-      <button data-x="serie">Série histórica de todos os pastos (CSV)</button>
-      <button data-x="obras" id="xobras" hidden>Avanço das áreas de trabalho (CSV)</button>
-      <button data-x="lot" class="xlot" hidden>Lotação dos pastos — ControlPasto (CSV)<small>hoje, média de 12 meses, lotes e série semanal</small></button>
-      <button data-x="lotmov" class="xlot" hidden>Movimentações dos pastos — ControlPasto (CSV)</button>
-    </div></details>
-  </div>
+<header class="top">
+  <span class="brand">Fazendas</span>
+  <select id="faz" aria-label="Fazenda"></select>
+  <span class="datebox" id="datebox" title="Imagem de satélite usada no NDVI">
+    <button id="prev" aria-label="Imagem anterior">‹</button><select id="data" aria-label="Data da imagem"></select><button id="next" aria-label="Próxima imagem">›</button>
+  </span>
+  <span id="sub">carregando…</span>
+  <details class="exp" id="exp"><summary>Exportar ▾</summary><div class="menu">
+    <button data-x="tif">GeoTIFF do NDVI<small>valores em cada pixel de 10 m · abre no QGIS/ArcGIS</small></button>
+    <button data-x="kmz">KMZ para Google Earth<small>imagem colorida como na tela, já posicionada</small></button>
+    <button data-x="png">PNG colorido + georreferência<small>.png + .pgw + .prj em um .zip (QGIS)</small></button>
+    <button data-x="csv">Tabela dos pastos — esta imagem (CSV)</button>
+    <button data-x="serie">Série histórica de todos os pastos (CSV)</button>
+    <button data-x="obras" id="xobras" hidden>Avanço das áreas de trabalho (CSV)</button>
+    <button data-x="lot" class="xlot" hidden>Lotação dos pastos — ControlPasto (CSV)<small>hoje, média de 12 meses, lotes e série semanal</small></button>
+    <button data-x="lotmov" class="xlot" hidden>Movimentações dos pastos — ControlPasto (CSV)</button>
+  </div></details>
 </header>
 <main>
   <div id="vista">
-  <div id="map"></div>
-  <div id="v3" hidden>
-    <canvas id="v3c" tabindex="0" aria-label="Terreno da fazenda em 3D"></canvas>
-    <div id="v3lbl"></div>
-    <div class="v3bar">
-      <label>Exagero <select id="v3ex"><option value="1">×1 (real)</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option><option value="10">×10</option></select></label>
-      <label>Cores <select id="v3tx"><option value="ndvi">NDVI da imagem</option><option value="alt">Altitude</option></select></label>
-      <label><input type="checkbox" id="v3ps" checked> Pastos</label>
-      <label><input type="checkbox" id="v3nm"> Nomes</label>
-      <button id="v3undo" title="Tirar o último ponto">↶ Ponto</button><button id="v3clr">Limpar caminho</button>
+    <div id="map"></div>
+    <div id="v3" hidden>
+      <canvas id="v3c" tabindex="0" aria-label="Terreno da fazenda em 3D"></canvas>
+      <div id="v3lbl"></div>
+      <div id="v3msg" hidden></div>
     </div>
-    <div id="v3tip">clique = marcar ponto · arrastar = girar · botão direito ou 2 dedos = deslocar · roda = zoom</div>
-    <div id="v3msg" hidden></div>
-    <div id="v3alt" class="altbox" hidden></div><div id="v3leg"></div>
-    <div id="v3info"></div>
-  </div>
+    <div class="ov tl">
+      <span class="seg" id="corsw" role="group" aria-label="O que as cores mostram">
+        <button data-c="ndvi" aria-pressed="true" title="Vigor da vegetação (imagem de satélite da data escolhida)">NDVI</button>
+        <button data-c="lot" aria-pressed="false" title="Lotação dos pastos pelo ControlPasto (UA/ha)">Lotação</button>
+        <button data-c="alt" aria-pressed="false" title="Altitude do terreno (relevo)">Relevo</button>
+      </span>
+      <span class="seg sub" id="lotsw" role="group" aria-label="Período da lotação" hidden>
+        <button data-l="hoje" aria-pressed="true">Hoje</button><button data-l="m12" aria-pressed="false">Média 12 meses</button>
+      </span>
+    </div>
+    <div class="ov tr">
+      <span class="seg" id="vsw" role="group" aria-label="Vista"><button data-v="mapa" aria-pressed="true" title="Mapa visto de cima">2D</button><button data-v="3d" aria-pressed="false" title="Terreno em 3D">3D</button></span>
+      <button class="chip" id="bMed" aria-pressed="false" title="Marcar pontos no terreno e ver o perfil de altitude e declive"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 17l6-6 4 4 8-8"/><path d="M3 21h18"/></svg>Perfil</button>
+      <details class="pop" id="lay"><summary class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>Camadas</summary>
+        <div class="menu">
+          <h4>No mapa</h4>
+          <label class="row" id="rowSat"><input type="checkbox" id="lsat" checked> Imagem de satélite de fundo <small id="satnota"></small></label>
+          <label class="row"><input type="checkbox" id="lpas" checked> Contorno dos pastos</label>
+          <label class="row"><input type="checkbox" id="lnom" checked> Nomes dos pastos</label>
+          <label class="row" id="rvl" hidden><input type="checkbox" id="curv"> Curvas de nível</label>
+          <label class="row" id="obl" hidden><input type="checkbox" id="obr"> Áreas de trabalho <small>só em 2D</small></label>
+          <h4>Intensidade das cores</h4>
+          <input type="range" id="opac" min="0" max="100" step="5" value="90" aria-label="Intensidade das cores">
+          <div id="grpNdvi">
+            <h4>NDVI</h4>
+            <div class="lin"><span>Mostrar</span><span class="seg" id="modosw"><button data-m="pix" aria-pressed="true">Pixel a pixel</button><button data-m="med" aria-pressed="false">Média do pasto</button></span></div>
+            <div class="lin"><span>Escala</span><span class="seg" id="escsw"><button data-e="max" aria-pressed="true" title="As cores vão do 2% mais baixo ao 2% mais alto desta imagem">Contraste</button><button data-e="fixa" aria-pressed="false" title="As cores valem o mesmo NDVI em todas as datas">Fixa</button></span></div>
+            <div class="lin"><span>Cores</span><select id="pal" style="width:auto"><option value="esp">Espectro em 14 classes</option><option value="cont">Marrom–verde contínuo</option></select></div>
+          </div>
+          <div id="grp3d" hidden>
+            <h4>3D</h4>
+            <div class="lin"><span>Exagero do relevo</span><select id="v3ex" style="width:auto"><option value="1">×1 (real)</option><option value="2">×2</option><option value="3">×3</option><option value="5">×5</option><option value="10">×10</option></select></div>
+          </div>
+        </div>
+      </details>
+    </div>
+    <div id="leg"><b id="legT">NDVI</b><div class="bar" id="bar"></div><div class="ticks" id="ticks"></div><div class="nota" id="legN"></div></div>
+    <div id="hud" hidden></div>
+    <div class="zbtn" id="z3" hidden><button id="z3in" aria-label="Aproximar">+</button><button id="z3out" aria-label="Afastar">−</button><button id="z3rst" aria-label="Voltar à vista inicial" title="Voltar à vista inicial" style="font-size:15px">⟲</button></div>
   </div>
   <div class="side">
-    <div class="card" id="pfcard" hidden>
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>Perfil do terreno</b><span class="muted" id="pfinfo"></span></div>
-      <div id="pfbody"></div>
-      <div class="ctl" style="margin-top:8px"><button id="pfundo">↶ Tirar último ponto</button><button id="pfclr">Limpar caminho</button><button id="pfcsv">Exportar perfil (CSV)</button></div>
-    </div>
-    <div class="card">
-      <div class="kpis">
-        <div class="kpi"><b id="k1">–</b><span id="k1l">NDVI médio dos pastos</span></div>
-        <div class="kpi"><b id="k2">–</b><span id="k2l">variação vs. imagem anterior</span></div>
-        <div class="kpi"><b id="k3">–</b><span id="k3l">área sem nuvem</span></div>
+    <div class="ptop">
+      <div class="tabs" role="tablist">
+        <button data-t="resumo" role="tab" aria-selected="true">Visão geral</button>
+        <button data-t="lista" role="tab" aria-selected="false">Pastos</button>
+        <button data-t="perfil" role="tab" aria-selected="false" hidden>Perfil</button>
+        <button data-t="obras" role="tab" aria-selected="false" hidden>Áreas de trabalho</button>
       </div>
-      <div class="leg" style="margin-top:10px"><span id="legA">NDVI baixo</span><div class="bar" id="bar"></div><span id="legB">NDVI alto</span></div>
-      <div class="ticks" id="ticks"></div>
-      <div class="muted" id="escnota" style="margin-top:3px"></div>
+      <div class="ctx">
+        <label>Retiro <select id="ret"><option value="">Todos</option></select></label>
+        <span id="selchip" hidden><span id="selnome"></span><button id="selx" aria-label="Tirar a seleção" title="Tirar a seleção">×</button></span>
+      </div>
     </div>
-    <div class="card" id="cpcard" hidden></div>
-    <div class="card" id="obcard" hidden>
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b>Avanço das áreas de trabalho</b><span class="muted" id="obinfo"></span></div>
-      <div class="chart" id="obchart"></div>
-      <div class="tw" style="max-height:none"><table><thead><tr><th>Área</th><th></th><th>ha</th><th title="Área que já apareceu como solo exposto desde o início do trabalho">Trabalhado</th><th title="Parte da área com solo exposto nesta imagem">Solo agora</th><th title="Área já trabalhada que voltou a ficar verde (NDVI ≥ 0,55)">Verde de novo</th></tr></thead><tbody id="obtb"></tbody></table></div>
-      <div class="muted" id="obnota"></div>
-    </div>
-    <div class="card chart">
-      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b id="ctit">Série histórica</b><span class="muted" id="cinfo"></span></div>
-      <div id="chart"></div>
-      <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · ● Sentinel-2 · ○ Landsat · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
-    </div>
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline"><b id="tbtit">Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
-      <div class="tw"><table><thead id="thd"><tr><th data-k="nome">Pasto</th><th data-k="retiro">Retiro</th><th data-k="ha">ha</th><th data-k="v">NDVI</th><th data-k="d">Δ</th><th data-k="dt">medido em</th></tr></thead><tbody id="tb"></tbody></table></div>
-    </div>
-    <div class="muted">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
+    <section class="tab" id="t-resumo">
+      <div class="card" id="kcard">
+        <div class="kpis">
+          <div class="kpi"><b id="k1">–</b><span id="k1l">NDVI médio dos pastos</span></div>
+          <div class="kpi"><b id="k2">–</b><span id="k2l">variação vs. imagem anterior</span></div>
+          <div class="kpi"><b id="k3">–</b><span id="k3l">área sem nuvem</span></div>
+        </div>
+        <div class="muted" id="escnota" style="margin-top:6px"></div>
+      </div>
+      <div class="card chart" id="chcard">
+        <div class="hdr"><b id="ctit">Série histórica</b><span class="muted" id="cinfo"></span></div>
+        <div id="chart"></div>
+        <div class="muted">Linha: NDVI médio · faixa: P10–P90 do pasto · ● Sentinel-2 · ○ Landsat · tracejado: média da fazenda (datas com ≥ 70% da área sem nuvem)</div>
+      </div>
+      <div class="card" id="relcard" hidden></div>
+      <div class="card" id="cpcard" hidden></div>
+      <div class="muted" style="order:9">Fontes: Copernicus Sentinel-2 L2A (10 m), via Copernicus Data Space Ecosystem; Landsat 8 e 9 Collection 2 Level-2 (30 m, cortesia do U.S. Geological Survey), via Microsoft Planetary Computer; relevo Copernicus DEM GLO-30; lotação do ControlPasto. Nuvens, sombras e cirrus mascarados pela classificação de cena (SCL). Contém dados modificados Copernicus Sentinel. Atualização automática diária. <span id="upd"></span></div>
+    </section>
+    <section class="tab" id="t-lista" hidden>
+      <div class="card">
+        <div class="hdr"><b id="tbtit">Pastos na imagem selecionada</b><span class="muted" id="tinfo"></span></div>
+        <div class="tw"><table><thead id="thd"><tr><th data-k="nome">Pasto</th><th data-k="retiro">Retiro</th><th data-k="ha">ha</th><th data-k="v">NDVI</th><th data-k="d">Δ</th><th data-k="dt">medido em</th></tr></thead><tbody id="tb"></tbody></table></div>
+      </div>
+    </section>
+    <section class="tab" id="t-perfil" hidden>
+      <div class="card" id="pfcard">
+        <div class="hdr"><b>Perfil do terreno</b><span class="muted" id="pfinfo"></span></div>
+        <div id="pfbody"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button id="pfundo">↶ Tirar último ponto</button><button id="pfclr">Limpar caminho</button><button id="pfcsv">Exportar perfil (CSV)</button></div>
+      </div>
+    </section>
+    <section class="tab" id="t-obras" hidden>
+      <div class="card" id="obcard">
+        <div class="hdr"><b>Avanço das áreas de trabalho</b><span class="muted" id="obinfo"></span></div>
+        <div class="chart" id="obchart"></div>
+        <div class="tw"><table><thead><tr><th>Área</th><th></th><th>ha</th><th title="Área que já apareceu como solo exposto desde o início do trabalho">Trabalhado</th><th title="Parte da área com solo exposto nesta imagem">Solo agora</th><th title="Área já trabalhada que voltou a ficar verde (NDVI ≥ 0,55)">Verde de novo</th></tr></thead><tbody id="obtb"></tbody></table></div>
+        <div class="muted" id="obnota"></div>
+      </div>
+    </section>
   </div>
 </main>
 <script>
@@ -199,6 +300,10 @@ const fmt=(v,d=2)=>v==null||isNaN(v)?'–':v.toLocaleString('pt-BR',{minimumFrac
 const SATN={S2:'Sentinel-2',L8:'Landsat 8',L9:'Landsat 9'};const satn=p=>SATN[p?.sat||'S2']||p?.sat;
 const fdate=s=>{const [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
 const st={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
+/* estado da interface: o que as cores mostram (cor), período da lotação, NDVI por pixel ou média do pasto, ferramenta de perfil e aba do painel */
+const UI={cor:st.get('ndvi_cor')||(st.get('ndvi_cam')&&st.get('ndvi_cam')!=='ndvi'?'lot':'ndvi'),lotm:st.get('ndvi_lotm')||(st.get('ndvi_cam')==='m12'?'m12':'hoje'),
+  modo:st.get('ndvi_modo')||'pix',medir:false,tab:'resumo'};
+let ESC=st.get('ndvi_esc')||'max';
 
 /* ---------------- senha ---------------- */
 const SAL='ndvi-fazendas:';
@@ -241,11 +346,10 @@ const q2v=q=>(q-1)/254*1.15-0.2;
 let OBJ=null,obLayer=null,obOpen={},IDX,D,GJ,FKEY,map,img,layer,labels,sel=null,sortK='nome',sortA=true,passImgs=[];
 let RAST=null; // {q:Uint8Array,W,H,data}
 let MASK=null; // máscara dos pastos (Uint8Array)
-map=L.map('map',{zoomSnap:0.25});
-L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Imagem de fundo: Esri, Maxar, Earthstar Geographics'}).addTo(map);
+map=L.map('map',{zoomSnap:0.25,zoomControl:false});L.control.zoom({position:'bottomright'}).addTo(map);
+const satLayer=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:18,attribution:'Imagem de fundo: Esri, Maxar, Earthstar Geographics'});
 labels=L.layerGroup().addTo(map);
 map.createPane('ndvi');map.getPane('ndvi').style.zIndex=350;
-$('#esc').value=st.get('ndvi_esc')||'max';
 
 async function init(){
   IDX=await (await fetch('data/fazendas.json',{cache:'no-store'})).json();
@@ -258,23 +362,24 @@ async function loadFarm(k){
   st.set('ndvi_faz',k);FKEY=k;MASK=null;sel=null;desmontar3D();PATH=[];atualizaCaminho();if(VISTA==='3d'){$('#v3msg').hidden=false;$('#v3msg').textContent='carregando…'}
   D=await (await fetch(IDX[k].arquivo,{cache:'no-store'})).json();
   GJ=await (await fetch(D.pastos_geojson,{cache:'no-store'})).json();
-  $('#titulo').textContent='NDVI — '+D.fazenda;
+  document.title=D.fazenda+' — Fazendas';
   const rs=[...new Set(GJ.features.map(f=>f.properties.retiro))].sort();
   $('#ret').innerHTML='<option value="">Todos</option>'+rs.map(r=>`<option>${r}</option>`).join('');
   passImgs=D.passagens.filter(p=>p.img);
   $('#data').innerHTML=passImgs.map((p,i)=>`<option value="${i}">${fdate(p.data)} · ${satn(p)} · ${Math.round(p.limpo*100)}% limpo</option>`).reverse().join('');
   const [w,s,e,n]=D.bbox;map.fitBounds([[s,w],[n,e]],{padding:[10,10]});
   if(layer)layer.remove();
-  layer=L.geoJSON(GJ,{style:styleF,onEachFeature:(f,l)=>{l.on('click',()=>pick(f.properties.id));l.bindTooltip(()=>tip(f.properties),{sticky:true})}});
+  layer=L.geoJSON(GJ,{style:styleF,onEachFeature:(f,l)=>{l.on('click',()=>{if(!UI.medir)pick(f.properties.id)});l.bindTooltip(()=>tip(f.properties),{sticky:true})}});
   if(obLayer){obLayer.remove();obLayer=null}OBJ=null;$('#obr').checked=false;
   if(D.obras&&D.obras_geojson){OBJ=await (await fetch(D.obras_geojson,{cache:'no-store'})).json();
     obLayer=L.geoJSON(OBJ,{style:f=>({color:OBC(f.properties.area),weight:2.4,dashArray:'6 4',fillOpacity:0,opacity:.95}),
       onEachFeature:(f,l)=>l.bindTooltip(()=>obTip(f.properties),{sticky:true})})}
-  $('#obl').hidden=!OBJ;$('#obcard').hidden=!OBJ;$('#xobras').hidden=!OBJ;
+  $('#obl').hidden=!OBJ;tabBtn('obras').hidden=!OBJ;if(!OBJ&&UI.tab==='obras')setTab('resumo');$('#xobras').hidden=!OBJ;
   camadas();
   const ult=D.passagens[D.passagens.length-1];
   $('#upd').textContent=`Última passagem consultada: ${ult?fdate(ult.data):'–'}; página gerada em ${D.atualizado?.replace('T',' ').replace('Z',' UTC')}.`;
   await setDate(passImgs.length-1);
+  selChip();
   loadRelevo(k);
   loadLot(k);
 }
@@ -286,9 +391,11 @@ function seriesAt(id,dateStr){const s=D.serie[id];if(!s)return null;let best=nul
 function prevOf(id,dateStr){const s=D.serie[id];if(!s)return null;let p=null;for(const r of s){if(r[0]<dateStr)p=r;else break}return p}
 function cur(){return passImgs[+$('#data').value]}
 function rowFor(f){const d=cur()?.data;const r=seriesAt(f.properties.id,d);const p=r?prevOf(f.properties.id,r[0]):null;return {f,id:f.properties.id,nome:f.properties.nome,retiro:f.properties.retiro,ha:f.properties.area_ha,v:r?r[1]:null,sat:r?r[5]:null,p10:r?r[2]:null,p90:r?r[3]:null,d:(r&&p)?r[1]-p[1]:null,dt:r?r[0]:null,atual:r&&r[0]===d}}
-function styleF(f){if(lotOn())return styleLot(f);const r=rowFor(f);const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
-  return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:$('#opac').checked?0:(hide?0:0.85),fillColor:col(r.v)}}
-function tip(p){if(lotOn())return tipLot(p);const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
+function contorno(f){const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
+  return {hide,color:s?'#ffd400':'#f4f1e6',weight:s?3.2:1,opacity:s?1:hide?0.15:($('#lpas').checked?0.9:0)}}
+function styleF(f){if(lotOn())return styleLot(f);if(altOn())return styleAlt(f);const r=rowFor(f);const c=contorno(f);
+  return {color:c.color,weight:c.weight,opacity:c.opacity,fillOpacity:(UI.modo==='med'&&!c.hide)?opv():0,fillColor:col(r.v)}}
+function tip(p){if(lotOn())return tipLot(p);if(altOn())return tipAlt(p);const r=rowFor({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>NDVI ${fmt(r.v)}${r.d!=null?` (${r.d>=0?'+':''}${fmt(r.d)})`:''}${r.dt&&!r.atual?`<br><i>medido em ${fdate(r.dt)}</i>`:''}`}
 
 /* ---------------- raster: lê o PNG de 8 bits e colore no navegador ---------------- */
 function loadImg(src){return new Promise((ok,err)=>{const im=new Image();im.onload=()=>ok(im);im.onerror=err;im.src=src})}
@@ -309,7 +416,7 @@ function mascara(W,H){
   MASK={W,H,m};return m;
 }
 function escala(){
-  if($('#esc').value==='fixa'||!RAST){LO=-0.2;HI=0.95;$('#escnota').textContent='Escala fixa: as cores valem o mesmo NDVI em todas as datas.';return}
+  if(ESC==='fixa'||!RAST){LO=-0.2;HI=0.95;$('#escnota').textContent='Escala fixa: as cores valem o mesmo NDVI em todas as datas.';return}
   const m=mascara(RAST.W,RAST.H);const h=new Uint32Array(256);let n=0;
   for(let i=0;i<RAST.q.length;i++){const q=RAST.q[i];if(q&&m[i]){h[q]++;n++}}
   if(n<500){for(let i=0;i<RAST.q.length;i++){const q=RAST.q[i];if(q){h[q]++;n++}}}
@@ -324,15 +431,14 @@ function pintar(){
   for(let i=0,j=0;i<q.length;i++,j+=4){const v=q[i];if(!v){o[j+3]=0;continue}const c=map8[v]*3;o[j]=LUT[c];o[j+1]=LUT[c+1];o[j+2]=LUT[c+2];o[j+3]=255}
   cx.putImageData(out,0,0);RAST.canvas=cv;RAST.key=FKEY;
   const [w,s,e,n]=D.bbox;
-  if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:($('#opac').checked&&!lotOn())?0.92:0,interactive:false}).addTo(map);
-  const nt=PALS[PAL].classes?8:5;const t=[...Array(nt).keys()].map(i=>fmt(LO+(HI-LO)*i/(nt-1)));$('#ticks').innerHTML=t.map(x=>`<span>${x}</span>`).join('');
-  retex3D();
+  if(img)img.remove();img=L.imageOverlay(cv.toDataURL('image/png'),[[s,w],[n,e]],{pane:'ndvi',opacity:ndviOp(),interactive:false}).addTo(map);
+  legenda();retex3D();
 }
 async function setDate(i){
-  if(i<0||i>=passImgs.length){$('#sub').textContent='Ainda sem imagem limpa processada.';return}
+  if(i<0||i>=passImgs.length){NDVISUB='Ainda sem imagem limpa processada.';cabecalho();return}
   $('#data').value=i;const p=passImgs[i];
   const nL=passImgs.filter(x=>(x.sat||'S2')!=='S2').length;
-  $('#sub').textContent=`${satn(p)} de ${fdate(p.data)}${(p.sat||'S2')!=='S2'?' (30 m)':' (10 m)'} · ${Math.round(p.limpo*100)}% da área sem nuvem · ${passImgs.length} imagens no histórico (${passImgs.length-nL} Sentinel-2, ${nL} Landsat)`;
+  NDVISUB=`NDVI do ${satn(p)} de ${fdate(p.data)}${(p.sat||'S2')!=='S2'?' (30 m)':' (10 m)'} · ${Math.round(p.limpo*100)}% da área sem nuvem · ${passImgs.length} imagens no histórico (${passImgs.length-nL} Sentinel-2, ${nL} Landsat)`;cabecalho();
   try{RAST=await lerRaster(p)}catch(e){RAST=null}
   if(cur()!==p)return;
   escala();if(RAST)pintar();
@@ -340,7 +446,7 @@ async function setDate(i){
 }
 function refresh(){
   if(!layer||!GJ||!D)return;
-  painel();if(lotOn()){refreshLot();return}
+  painel();if(lotOn()){refreshLot();return}if(altOn()){refreshAlt();return}
   const rows=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).map(rowFor);
   const ok=rows.filter(r=>r.v!=null&&r.atual);const ha=ok.reduce((a,r)=>a+r.ha,0);
   const m=ha?ok.reduce((a,r)=>a+r.v*r.ha,0)/ha:null;const dd=ok.filter(r=>r.d!=null);const hd=dd.reduce((a,r)=>a+r.ha,0);
@@ -353,7 +459,7 @@ function refresh(){
   layer.setStyle(styleF);
   labels.clearLayers();
   const obOn=OBJ&&$('#obr').checked;
-  if(!obOn&&map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(r.nome))}
+  if(!obOn&&$('#lnom').checked&&map.getZoom()>=13.5)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(r.nome))}
   drawChart();drawObras();drawCP();
 }
 
@@ -373,7 +479,7 @@ function drawObras(){
   h+=row('_total','<b>Total</b>',haT,'','','');
   $('#obtb').innerHTML=h;
   const rt=obAt('_total',d);$('#obinfo').textContent=rt?`${fmt(haT*rt[1]/100,0)} de ${fmt(haT,0)} ha trabalhados até ${fdate(rt[0])}`:'';
-  $('#obnota').textContent=`Trabalhado = já apareceu como solo exposto (NDVI < ${String(O.limiares?.solo??0.35).replace('.',',')}) desde ${fdate(O.inicio)}, sem contar o que já era solo antes (estradas, currais, aguadas). Só entram imagens com ≥ 90% da fazenda sem nuvem. Clique numa área para ver as subáreas; marque "Áreas de trabalho" no topo para vê-las no mapa.`;
+  $('#obnota').textContent=`Trabalhado = já apareceu como solo exposto (NDVI < ${String(O.limiares?.solo??0.35).replace('.',',')}) desde ${fdate(O.inicio)}, sem contar o que já era solo antes (estradas, currais, aguadas). Só entram imagens com ≥ 90% da fazenda sem nuvem. Clique numa área para ver as subáreas; ligue "Áreas de trabalho" em Camadas para vê-las no mapa.`;
   if($('#obr').checked&&map.getZoom()>=13)for(const f of OBJ.features){const r=obAt(f.properties.id,d);const c=L.geoJSON(f).getBounds().getCenter();
     labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`<span style="color:${OBC(f.properties.area)};background:#fff;padding:0 3px;border-radius:3px;text-shadow:none">${f.properties.nome} · ${pct(r?r[1]:0)}</span>`))}
   const keys=[...O.areas,'_total'];const all=keys.flatMap(k=>(O.serie[k]||[]).map(r=>r[0]));if(!all.length){$('#obchart').innerHTML='';return}
@@ -389,7 +495,7 @@ function drawObras(){
   g+=`<line x1="${X(d)}" x2="${X(d)}" y1="${T0}" y2="${H-B0}" stroke="var(--ink)" stroke-opacity=".3"/>`;
   $('#obchart').innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:150px;display:block">${g}</svg><div class="muted">% de cada área já trabalhada (acumulado). Tracejado: total.</div>`;
 }
-function pick(id){sel=sel===id?null:id;refresh();const tr=document.querySelector(`tr[data-id="${CSS.escape(id)}"]`);if(tr)tr.scrollIntoView({block:'nearest'})}
+function pick(id){sel=sel===id?null:id;refresh();selChip();retex3D();const tr=document.querySelector(`tr[data-id="${CSS.escape(id)}"]`);if(tr)tr.scrollIntoView({block:'nearest'})}
 function farmMean(){const by={};for(const f of GJ.features){if($('#ret').value&&f.properties.retiro!==$('#ret').value)continue;for(const r of (D.serie[f.properties.id]||[])){(by[r[0]]??=[0,0]);by[r[0]][0]+=r[1]*f.properties.area_ha;by[r[0]][1]+=f.properties.area_ha}}
   const tot=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).reduce((a,f)=>a+f.properties.area_ha,0);
   return Object.entries(by).filter(([,v])=>v[1]>=0.7*tot).sort().map(([d,v])=>[d,v[0]/v[1]])}
@@ -483,10 +589,9 @@ document.addEventListener('click',e=>{if(!e.target.closest('#exp'))$('#exp').ope
 /* ---------------- relevo: curvas de nível, altitude no cursor e vista 3D ---------------- */
 let REL=null,curvLayer=null;const curvLbl=L.layerGroup();
 map.createPane('relevo');map.getPane('relevo').style.zIndex=380;map.getPane('relevo').style.pointerEvents='none';
-const altCtl=L.control({position:'bottomleft'});altCtl.onAdd=()=>{const d=L.DomUtil.create('div','altbox');d.id='alt';d.hidden=true;return d};altCtl.addTo(map);
 $('#curv').checked=st.get('ndvi_curv')==='1';
 async function loadRelevo(k){
-  REL=null;if(curvLayer){curvLayer.remove();curvLayer=null}curvLbl.clearLayers();$('#rvl').hidden=true;$('#alt').hidden=true;
+  REL=null;if(curvLayer){curvLayer.remove();curvLayer=null}curvLbl.clearLayers();$('#rvl').hidden=true;if(altOv){altOv.remove();altOv=null}estadoControles();
   let meta;try{const r=await fetch(`relevo/${k}.json`,{cache:'no-store'});if(!r.ok)return;meta=await r.json()}catch(e){return}
   if(FKEY!==k)return;
   let im;try{im=await loadImg(meta.dem)}catch(e){return}
@@ -494,7 +599,7 @@ async function loadRelevo(k){
   const px=cx.getImageData(0,0,meta.W,meta.H).data;const z=new Float32Array(meta.W*meta.H);
   for(let i=0,j=0;i<z.length;i++,j+=4)z[i]=meta.zmin+(px[j]*256+px[j+1])/10;
   if(FKEY!==k)return;
-  REL={...meta,z};$('#rvl').hidden=false;
+  REL={...meta,z};$('#rvl').hidden=false;estadoControles();if(UI.cor==='alt')aplicaCam();
   $('#rvl').title=`Curvas a cada ${REL.equidistancia} m (mestras a cada ${REL.mestra} m) · ${REL.fonte}, ${REL.resolucao_m} m · altitude de ${fmt(REL.zmin,0)} a ${fmt(REL.zmax,0)} m`;
   await curvas();
   if(VISTA==='3d')await montar3D();
@@ -521,8 +626,9 @@ function altEm(lat,lng){
   const u=(lng-w)/(e-w)*W-0.5,v=(n-lat)/(n-s)*H-0.5;if(u<-0.5||v<-0.5||u>W-0.5||v>H-0.5)return null;
   const i=Math.max(0,Math.min(W-2,Math.floor(u))),j=Math.max(0,Math.min(H-2,Math.floor(v))),fu=Math.max(0,Math.min(1,u-i)),fv=Math.max(0,Math.min(1,v-j));
   return (Z[j*W+i]*(1-fu)+Z[j*W+i+1]*fu)*(1-fv)+(Z[(j+1)*W+i]*(1-fu)+Z[(j+1)*W+i+1]*fu)*fv}
-map.on('mousemove',e=>{const a=altEm(e.latlng.lat,e.latlng.lng);const el=$('#alt');if(!el)return;if(a==null){el.hidden=true;return}el.hidden=false;el.textContent=`altitude ${fmt(a,0)} m`});
-map.on('mouseout',()=>{const el=$('#alt');if(el)el.hidden=true});
+map.on('mousemove',e=>hudEm(e.latlng.lat,e.latlng.lng));
+map.on('mouseout',()=>hudEm(null));
+map.on('click',e=>{if(!UI.medir)return;const inf=pontoInfo(e.latlng.lat,e.latlng.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()});
 map.on('moveend',rotulosCurvas);
 $('#curv').onchange=async()=>{await curvas();retex3D()};
 
@@ -541,19 +647,21 @@ function imgAltitude(){ // altitude em cores com sombreado (luz de noroeste)
     const sh=Math.max(0,Math.sin(alt)*Math.cos(sl)+Math.cos(alt)*Math.sin(sl)*Math.cos(az-Math.PI/2-asp));
     const c=hipso((z[k]-zmin)/rg);const m=0.62+0.48*sh;d[k*4]=c[0]*m;d[k*4+1]=c[1]*m;d[k*4+2]=c[2]*m;d[k*4+3]=255}
   cx.putImageData(o,0,0);return cv}
-function textura3D(modo){
+function textura3D(){const modo=modo3D();
   const [w,s,e,n]=REL.bbox;const [WM,HM]=dimsM();const TW=2048,TH=Math.min(4096,Math.round(TW*HM/WM));
   const cv=document.createElement('canvas');cv.width=TW;cv.height=TH;const cx=cv.getContext('2d');
   cx.imageSmoothingEnabled=true;cx.drawImage(REL.altImg||(REL.altImg=imgAltitude()),0,0,TW,TH);
-  if(modo==='ndvi'&&RAST?.canvas&&RAST.key===FKEY)cx.drawImage(RAST.canvas,0,0,TW,TH);
   const X=x=>(x-w)/(e-w)*TW,Y=y=>(n-y)/(n-s)*TH;const kpx=TW/WM*30;
+  const anel=g=>{const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;cx.beginPath();for(const p of polys)for(const ring of p){ring.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));cx.closePath()}};
+  if(modo==='ndvi'&&UI.modo!=='med'&&RAST?.canvas&&RAST.key===FKEY){cx.globalAlpha=Math.max(.15,opv());cx.drawImage(RAST.canvas,0,0,TW,TH);cx.globalAlpha=1}
+  if((modo==='lot'||(modo==='ndvi'&&UI.modo==='med'))&&GJ){cx.globalAlpha=Math.max(.15,opv())*.9;
+    for(const f of GJ.features){const c=modo==='lot'?lotCol(lotVal(f.properties.id)):col(rowFor(f).v);anel(f.geometry);cx.fillStyle=c;cx.fill('evenodd')}cx.globalAlpha=1}
   if($('#curv').checked&&REL.gj){for(const f of REL.gj.features){const c=f.geometry.coordinates;cx.beginPath();c.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));
       cx.lineWidth=f.properties.mestra?Math.max(1.6,kpx*0.12):Math.max(0.8,kpx*0.05);
-      cx.strokeStyle=modo==='ndvi'?(f.properties.mestra?'rgba(255,236,190,.95)':'rgba(255,248,230,.6)'):(f.properties.mestra?'rgba(70,45,20,.85)':'rgba(70,45,20,.45)');cx.stroke()}}
-  if($('#v3ps').checked&&GJ){cx.strokeStyle='rgba(255,255,255,.95)';cx.lineWidth=Math.max(1.5,kpx*0.1);cx.lineJoin='round';
-    for(const f of GJ.features){const g=f.geometry;const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
-      for(const p of polys)for(const ring of p){cx.beginPath();ring.forEach(([x,y],i)=>i?cx.lineTo(X(x),Y(y)):cx.moveTo(X(x),Y(y)));cx.closePath();cx.stroke()}}}
-  if($('#v3nm').checked&&GJ){const fs=Math.round(Math.max(12,Math.min(26,TW/90)));cx.font=`600 ${fs}px system-ui,sans-serif`;cx.textAlign='center';cx.textBaseline='middle';
+      cx.strokeStyle=modo!=='alt'?(f.properties.mestra?'rgba(255,236,190,.95)':'rgba(255,248,230,.6)'):(f.properties.mestra?'rgba(70,45,20,.85)':'rgba(70,45,20,.45)');cx.stroke()}}
+  if($('#lpas').checked&&GJ){cx.strokeStyle='rgba(255,255,255,.95)';cx.lineWidth=Math.max(1.5,kpx*0.1);cx.lineJoin='round';for(const f of GJ.features){anel(f.geometry);cx.stroke()}}
+  if(sel&&GJ){const f=GJ.features.find(x=>x.properties.id===sel);if(f){anel(f.geometry);cx.strokeStyle='#ffd400';cx.lineWidth=Math.max(4,kpx*0.3);cx.stroke()}}
+  if($('#lnom').checked&&GJ){const fs=Math.round(Math.max(12,Math.min(26,TW/90)));cx.font=`600 ${fs}px system-ui,sans-serif`;cx.textAlign='center';cx.textBaseline='middle';
     for(const f of GJ.features){const b=L.geoJSON(f).getBounds().getCenter();cx.lineWidth=fs/4;cx.strokeStyle='rgba(0,0,0,.75)';cx.strokeText(f.properties.nome,X(b.lng),Y(b.lat));cx.fillStyle='#fff';cx.fillText(f.properties.nome,X(b.lng),Y(b.lat))}}
   return cv}
 function dentro([x,y],g){const polys=g.type==='Polygon'?[g.coordinates]:g.coordinates;
@@ -571,7 +679,8 @@ let VISTA=st.get('ndvi_vista')==='3d'?'3d':'mapa',V3=null,THREEm=null,PATH=[],PE
 async function setVista(v){
   VISTA=v;st.set('ndvi_vista',v);
   document.querySelectorAll('#vsw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v));
-  $('#map').style.visibility=v==='3d'?'hidden':'';$('#v3').hidden=v!=='3d';$('#pfcard').hidden=v!=='3d';
+  $('#map').style.visibility=v==='3d'?'hidden':'';$('#v3').hidden=v!=='3d';$('#z3').hidden=v!=='3d';$('#grp3d').hidden=v!=='3d';
+  $('#lsat').disabled=v==='3d';$('#satnota').textContent=v==='3d'?'só em 2D':'';hudEm(null);
   if(v==='3d')await montar3D();else{desmontar3D();map.invalidateSize()}
 }
 function desmontar3D(){if(!V3)return;V3.stop();V3.ro.disconnect();V3.ctl.dispose();V3.sc.traverse(o=>{o.geometry?.dispose();if(o.material){o.material.map?.dispose();o.material.dispose()}});V3.R.dispose();$('#v3lbl').innerHTML='';V3=null}
@@ -581,7 +690,6 @@ async function montar3D(){
   $('#v3msg').hidden=true;const key=FKEY;
   if(!REL.gj){try{REL.gj=await (await fetch(REL.curvas,{cache:'no-store'})).json()}catch(e){}}
   if(!st.get('ndvi_v3ex'))$('#v3ex').value=(REL.zmax-REL.zmin)<80?'5':'3';
-  $('#v3tx').querySelector('[value=ndvi]').disabled=!RAST;if(!RAST)$('#v3tx').value='alt';
   if(!THREEm){try{const T=await import('three');const {OrbitControls}=await import('three/addons/controls/OrbitControls.js');THREEm={T,OrbitControls}}
     catch(e){$('#v3msg').hidden=false;$('#v3msg').textContent='Não foi possível carregar o 3D neste navegador.';return}}
   if(VISTA!=='3d'||FKEY!==key||V3)return;
@@ -591,7 +699,7 @@ async function montar3D(){
   const [WM,HM]=dimsM();const [w,s,e,n]=REL.bbox;const nx=Math.min(REL.W,420),ny=Math.max(2,Math.round(nx*REL.H/REL.W));
   const g=new THREE.PlaneGeometry(WM,HM,nx-1,ny-1);g.rotateX(-Math.PI/2);const P=g.attributes.position;const hs=new Float32Array(nx*ny);
   for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){const lng=w+(e-w)*i/(nx-1),lat=n-(n-s)*j/(ny-1);hs[j*nx+i]=(altEm(Math.min(n,Math.max(s,lat)),Math.min(e,Math.max(w,lng)))??REL.zmin)-REL.zmin}
-  const tex=new THREE.CanvasTexture(textura3D($('#v3tx').value));tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=R.capabilities.getMaxAnisotropy();
+  const tex=new THREE.CanvasTexture(textura3D());tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=R.capabilities.getMaxAnisotropy();
   const mesh=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0}));sc.add(mesh);
   const sk=new THREE.BufferGeometry();const borda=[];for(let i=0;i<nx;i++)borda.push(i);for(let j=1;j<ny;j++)borda.push(j*nx+nx-1);for(let i=nx-2;i>=0;i--)borda.push((ny-1)*nx+i);for(let j=ny-2;j>=0;j--)borda.push(j*nx);
   const skP=new Float32Array(borda.length*6);sk.setAttribute('position',new THREE.BufferAttribute(skP,3));
@@ -620,31 +728,28 @@ async function montar3D(){
   const ray=new THREE.Raycaster(),mv=new THREE.Vector2();
   const pega=ev=>{const r=cv.getBoundingClientRect();mv.set((ev.clientX-r.left)/r.width*2-1,-(ev.clientY-r.top)/r.height*2+1);ray.setFromCamera(mv,cam);
     const hit=ray.intersectObject(mesh)[0];if(!hit)return null;return {lng:w+(hit.point.x+WM/2)/WM*(e-w),lat:n-(hit.point.z+HM/2)/HM*(n-s)}};
-  cv.onpointermove=ev=>{const q=pega(ev);const el=$('#v3alt');if(!q){el.hidden=true;return}const a=altEm(q.lat,q.lng);const pp=pastoEm(q.lng,q.lat);
-    el.hidden=a==null;el.textContent=`altitude ${fmt(a,0)} m${pp?` · ${pp.retiro} ${pp.nome}`:''} · clique para marcar ponto`};
-  cv.onpointerleave=()=>$('#v3alt').hidden=true;
+  cv.onpointermove=ev=>{const q=pega(ev);if(!q){hudEm(null);return}hudEm(q.lat,q.lng)};
+  cv.onpointerleave=()=>hudEm(null);
   // os ouvintes saem junto com a vista (antes ficavam acumulados no mesmo canvas a cada troca de fazenda e cada clique marcava 2+ pontos, um com a câmera antiga)
   const ac=new AbortController();let down=null;cv.addEventListener('pointerdown',ev=>{down={x:ev.clientX,y:ev.clientY,b:ev.button,t:performance.now()}},{signal:ac.signal});
   cv.addEventListener('pointerup',ev=>{if(!down||down.b!==0)return;const d=Math.hypot(ev.clientX-down.x,ev.clientY-down.y);const dt=performance.now()-down.t;down=null;
-    if(d>5||dt>600)return;const q=pega(ev);if(!q)return;const inf=pontoInfo(q.lat,q.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()},{signal:ac.signal});
+    if(d>5||dt>600)return;const q=pega(ev);if(!q)return;
+    if(!UI.medir){const pp=pastoEm(q.lng,q.lat);if(pp)pick(pp.id);return}
+    const inf=pontoInfo(q.lat,q.lng);if(!inf)return;PATH.push(inf);atualizaCaminho()},{signal:ac.signal});
   const vec=new THREE.Vector3();
   let raf=0;const loop=()=>{raf=requestAnimationFrame(loop);ctl.update();R.render(sc,cam);
     const lb=$('#v3lbl');const r=cv.getBoundingClientRect();let h='';
     (V3?.pins||[]).forEach((p,i)=>{vec.copy(p).project(cam);if(vec.z>1)return;const x=(vec.x+1)/2*r.width,y=(1-vec.y)/2*r.height;const q=PATH[i];const last=i===PATH.length-1;
       h+=`<div class="pin${last?' last':''}" style="left:${x}px;top:${y}px"><b>${i+1}</b>${last?` ${fmt(q.z,0)} m · ${fmt(q.graus,1)}° (${fmt(q.pct,1)}%)${q.face!=='plano'?' · cai para '+q.face:''}`:''}</div>`});
     if(lb.innerHTML!==h)lb.innerHTML=h};loop();
-  V3={key,R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>{cancelAnimationFrame(raf);ac.abort();cv.onpointermove=cv.onpointerleave=null},setEx,desenhaCaminho,hov,toXYZ,THREE,pins:[]};
-  setEx(+$('#v3ex').value);legenda3D();
+  V3={key,R,sc,g,sk,tex,mesh,ctl,ro,stop:()=>{cancelAnimationFrame(raf);ac.abort();cv.onpointermove=cv.onpointerleave=null},setEx,desenhaCaminho,hov,toXYZ,THREE,pins:[],
+    zoom:f=>{const v=cam.position.clone().sub(ctl.target).multiplyScalar(f);if(v.length()<ctl.minDistance||v.length()>ctl.maxDistance)return;cam.position.copy(ctl.target).add(v)},
+    reset:()=>{cam.position.set(D0*0.12,D0*0.62,D0*1.02);ctl.target.set(0,(REL.zmax-REL.zmin)*0.3,0)}};
+  setEx(+$('#v3ex').value);legenda();
 }
-function legenda3D(){
-  if(!REL)return;const modo=$('#v3tx').value;const rg=REL.zmax-REL.zmin;
-  $('#v3info').textContent=`${REL.fonte} (${REL.resolucao_m} m) · altitude ${fmt(REL.zmin,0)}–${fmt(REL.zmax,0)} m · curvas a cada ${REL.equidistancia} m`+(modo==='ndvi'&&RAST?` · NDVI de ${fdate(RAST.data)}`:'');
-  if(modo==='ndvi'&&RAST){$('#v3leg').innerHTML=`NDVI ${fdate(RAST.data)} (${$('#esc').value==='fixa'?'escala fixa':'máximo contraste'})<div class="bar" style="background:${$('#bar').style.background}"></div><div class="ticks">${$('#ticks').innerHTML}</div>`}
-  else{$('#v3leg').innerHTML=`Altitude (m)<div class="bar" style="background:linear-gradient(90deg,${HIPSO.map(([t,c])=>`rgb(${c}) ${t*100}%`).join(',')})"></div><div class="ticks">${[0,.25,.5,.75,1].map(t=>`<span>${fmt(REL.zmin+rg*t,0)}</span>`).join('')}</div>`}
-}
-function retex3D(){if(!V3||V3.key!==FKEY||!REL)return;const T=V3.THREE;$('#v3tx').querySelector('[value=ndvi]').disabled=!RAST;
-  const t=new T.CanvasTexture(textura3D($('#v3tx').value));t.colorSpace=T.SRGBColorSpace;t.anisotropy=V3.R.capabilities.getMaxAnisotropy();
-  V3.mesh.material.map.dispose();V3.mesh.material.map=t;V3.mesh.material.needsUpdate=true;legenda3D()}
+function retex3D(){if(!V3||V3.key!==FKEY||!REL)return;const T=V3.THREE;
+  const t=new T.CanvasTexture(textura3D());t.colorSpace=T.SRGBColorSpace;t.anisotropy=V3.R.capabilities.getMaxAnisotropy();
+  V3.mesh.material.map.dispose();V3.mesh.material.map=t;V3.mesh.material.needsUpdate=true}
 
 /* ---- caminho e perfil do terreno ---- */
 function atualizaCaminho(){
@@ -656,11 +761,11 @@ function atualizaCaminho(){
     let sobe=0,desce=0,dmax=0;for(let i=1;i<am.length;i++){const dz=am[i].z-am[i-1].z;if(dz>0)sobe+=dz;else desce-=dz}
     for(let i=0;i<am.length;i++){let j=i;while(j<am.length-1&&am[j].d-am[i].d<30)j++;if(am[j].d-am[i].d>=20){const s=Math.abs(am[j].z-am[i].z)/(am[j].d-am[i].d);if(s>dmax){dmax=s}}}
     const zs=am.map(q=>q.z);PERFIL={amostras:am,dist,sobe,desce,dmax,zmin:Math.min(...zs),zmax:Math.max(...zs)}}
-  if(V3)V3.desenhaCaminho();desenhaPerfil();
+  if(V3)V3.desenhaCaminho();desenhaCaminho2D();desenhaPerfil();tabBtn('perfil').hidden=!(UI.medir||PATH.length);
 }
 function desenhaPerfil(){
   const el=$('#pfbody');
-  if(!PATH.length){el.innerHTML='<div class="muted">Clique no terreno em 3D para marcar pontos. Cada clique mostra a altitude e o declive do ponto; com dois ou mais pontos aparece aqui o perfil do caminho.</div>';$('#pfinfo').textContent='';return}
+  if(!PATH.length){el.innerHTML='<div class="muted">Ligue <b>Perfil</b> sobre o mapa (em 2D ou 3D) e clique no terreno para marcar pontos. Cada ponto mostra a altitude e o declive; com dois ou mais pontos aparece aqui o perfil do caminho, com subida, descida e declive máximo.</div>';$('#pfinfo').textContent='';return}
   const pts=`<table style="margin-top:8px"><thead><tr><th>#</th><th>Pasto</th><th>Distância</th><th>Altitude</th><th>Declive</th><th>Cai para</th></tr></thead><tbody>${PATH.map((q,i)=>{
       const am=PERFIL?.amostras.find(a=>a.v===i);const pp=pastoEm(q.lng,q.lat);
       return `<tr><td>${i+1}</td><td>${pp?pp.nome:'–'}</td><td>${am?fmtD(am.d):'0 m'}</td><td>${fmt(q.z,1)} m</td><td>${fmt(q.graus,1)}° · ${fmt(q.pct,1)}%</td><td>${q.face}</td></tr>`}).join('')}</tbody></table>`;
@@ -684,8 +789,9 @@ function desenhaPerfil(){
     let q=am[0];for(const a of am){if(a.d>d)break;q=a}
     const c=$('#pfcur'),t=$('#pfcurt');c.setAttribute('x1',X(q.d));c.setAttribute('x2',X(q.d));c.setAttribute('visibility','visible');
     t.setAttribute('x',Math.min(X(q.d)+4,W-110));t.textContent=`${fmtD(q.d)} · ${fmt(q.z,1)} m`;t.setAttribute('visibility','visible');
-    if(V3){V3.hov.position.copy(V3.toXYZ(q.lng,q.lat,3*+$('#v3ex').value));V3.hov.visible=true}};
-  svg.onmouseleave=()=>{$('#pfcur').setAttribute('visibility','hidden');$('#pfcurt').setAttribute('visibility','hidden');if(V3)V3.hov.visible=false};
+    if(V3){V3.hov.position.copy(V3.toXYZ(q.lng,q.lat,3*+$('#v3ex').value));V3.hov.visible=true}
+    if(VISTA!=='3d'){if(!hov2d)hov2d=L.circleMarker([q.lat,q.lng],{radius:6,color:'#000',weight:1.5,fillColor:'#fff',fillOpacity:1,interactive:false});hov2d.setLatLng([q.lat,q.lng]).addTo(map)}};
+  svg.onmouseleave=()=>{$('#pfcur').setAttribute('visibility','hidden');$('#pfcurt').setAttribute('visibility','hidden');if(V3)V3.hov.visible=false;if(hov2d)hov2d.remove()};
 }
 const fmtD=d=>d>=1000?fmt(d/1000,d>=10000?1:2)+' km':fmt(d,0)+' m';
 function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(Math.max(x,1e-9))));for(const m of [1,2,2.5,5,10])if(m*p>=x)return m*p;return 10*p}
@@ -695,10 +801,9 @@ function exportaPerfil(){if(!PERFIL)return;const L=[['fazenda','ponto','distanci
 document.querySelectorAll('#vsw button').forEach(b=>b.onclick=()=>setVista(b.dataset.v));
 $('#v3ex').value=st.get('ndvi_v3ex')||'3';
 $('#v3ex').onchange=()=>{st.set('ndvi_v3ex',$('#v3ex').value);if(V3)V3.setEx(+$('#v3ex').value)};
-['#v3tx','#v3ps','#v3nm'].forEach(s=>$(s).onchange=retex3D);
 const limpaCaminho=()=>{PATH=[];atualizaCaminho()};
-$('#v3undo').onclick=$('#pfundo').onclick=()=>{PATH.pop();atualizaCaminho()};
-$('#v3clr').onclick=$('#pfclr').onclick=limpaCaminho;
+$('#pfundo').onclick=()=>{PATH.pop();atualizaCaminho()};
+$('#pfclr').onclick=limpaCaminho;
 $('#pfcsv').onclick=exportaPerfil;
 desenhaPerfil();
 
@@ -707,17 +812,15 @@ $('#prev').onclick=()=>setDate(Math.max(0,+$('#data').value-1));
 $('#next').onclick=()=>setDate(Math.min(passImgs.length-1,+$('#data').value+1));
 $('#ret').onchange=refresh;$('#faz').onchange=()=>loadFarm($('#faz').value);
 $('#pal').onchange=()=>{PAL=$('#pal').value;st.set('ndvi_pal',PAL);montaLUT();if(RAST)pintar();refresh()};
-$('#esc').onchange=()=>{st.set('ndvi_esc',$('#esc').value);escala();if(RAST)pintar();refresh()};
 $('#obr').onchange=()=>{camadas();refresh()};
 $('#obtb').onclick=e=>{const tr=e.target.closest('tr');if(!tr||!D.obras.areas.includes(tr.dataset.a))return;obOpen[tr.dataset.a]=!obOpen[tr.dataset.a];drawObras()};
-$('#opac').onchange=()=>{if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);refresh()};
 $('#tb').onclick=e=>{const tr=e.target.closest('tr');if(tr)pick(tr.dataset.id)};
 $('#thd').onclick=e=>{const th=e.target.closest('th[data-k]');if(!th)return;const k=th.dataset.k;sortA=sortK===k?!sortA:(k==='nome'||k==='retiro'||k==='lotes');sortK=k;refresh()};
 map.on('zoomend',refresh);
 /* ---------------- lotação dos pastos (ControlPasto) ----------------
    docs/lotacao/<fazenda>.json vem criptografado (AES-GCM) com a chave derivada da senha do site.
    Conteúdo: pastos{id:{cp,lotes[[lote,cab,pv,ua,cat]],cab,ua,lot,m12,s[[cab,ua] por data]}}, datas[], total{}, movs{id:[[data,op,lote,cab,peso,outro,obs]]}, sem_mapa[] */
-let LOT=null,LOTIDX=null,LOTERR='';let CAM=st.get('ndvi_cam')||'ndvi';
+let LOT=null,LOTIDX=null,LOTERR='';let CAM=UI.cor==='lot'?UI.lotm:'ndvi';
 const LOTMAX=3;
 const LRAMP=[[255,255,204],[255,237,160],[254,217,118],[254,178,76],[253,141,60],[240,59,32],[189,0,38],[128,0,38]];
 function lotOn(){return CAM!=='ndvi'&&!!LOT}
@@ -737,28 +840,29 @@ async function loadLot(k){LOT=null;LOTERR='';
     try{const env=await (await fetch(`lotacao/${k}.json`,{cache:'no-store'})).json();const L2=await decifra(env);if(FKEY===k)LOT=L2}
     catch(e){LOTERR='Não foi possível abrir os dados de lotação (a senha do site mudou?). Saia e entre de novo com a senha.'}}
   else LOTERR=LOTIDX.erro?('ControlPasto: '+LOTIDX.erro):'Esta fazenda ainda não tem dados de lotação do ControlPasto.';
-  const sel_=$('#cam');[...sel_.options].forEach(o=>{if(o.value!=='ndvi')o.disabled=!LOT});
-  sel_.value=LOT?CAM:'ndvi';sel_.title=LOT?'':LOTERR;
   document.querySelectorAll('.xlot').forEach(b=>b.hidden=!LOT);
   const ant=PAINEL;PAINEL='';aplicaCam(ant);
 }
-function aplicaCam(prev=PAINEL){if(img)img.setOpacity($('#opac').checked&&!lotOn()?0.92:0);
-  if(!lotOn()&&prev&&prev!=='ndvi'){montaLUT();if(RAST){escala();pintar()}}refresh()}
+function aplicaCam(prev=PAINEL){if(img)img.setOpacity(ndviOp());pintaAlt();
+  if(efCor()==='ndvi'&&prev&&prev!=='ndvi'){montaLUT();if(RAST){escala();pintar()}}estadoControles();refresh();cabecalho();legenda();retex3D()}
 let PAINEL='';
-function painel(){const m=lotOn()?CAM:'ndvi';if(m===PAINEL)return;PAINEL=m;
-  const H=lotOn()?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['lotes','Lote(s)'],['cab','cab'],['lot','UA/ha hoje'],['m12',mRot(true)]]
+function painel(){const m=altOn()?'alt':lotOn()?CAM:'ndvi';if(m===PAINEL)return;PAINEL=m;
+  const H=m==='alt'?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['zm','altitude'],['amp','desnível'],['decl','declive']]
+    :lotOn()?[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['lotes','Lote(s)'],['cab','cab'],['lot','UA/ha hoje'],['m12',mRot(true)]]
     :[['nome','Pasto'],['retiro','Retiro'],['ha','ha'],['v','NDVI'],['d','Δ'],['dt','medido em']];
   if(!H.some(h=>h[0]===sortK)){sortK='nome';sortA=true}
   $('#thd').innerHTML='<tr>'+H.map(([k,t])=>`<th data-k="${k}">${t}</th>`).join('')+'</tr>';
-  if(lotOn()){$('#k1l').textContent='cabeças nos pastos';$('#k2l').textContent=CAM==='m12'?'UA/ha — '+mRot():'UA/ha hoje';$('#k3l').textContent='pastos ocupados';
-    $('#legA').textContent='lotação baixa';$('#legB').textContent='alta';$('#tbtit').textContent='Pastos — lotação do ControlPasto';
-    $('#bar').style.background=`linear-gradient(90deg,${LRAMP.map((c,i)=>`rgb(${c}) ${Math.round(i/(LRAMP.length-1)*100)}%`).join(',')})`;
-    $('#ticks').innerHTML=[0,0.5,1,1.5,2,2.5,3].map(v=>`<span>${fmt(v,1)}${v===LOTMAX?'+':''}</span>`).join('')}
-  else{$('#k1l').textContent='NDVI médio dos pastos';$('#k2l').textContent='variação vs. imagem anterior';$('#k3l').textContent='área sem nuvem';$('#legA').textContent='NDVI baixo';$('#legB').textContent='NDVI alto';$('#tbtit').textContent='Pastos na imagem selecionada'}
+  const lab=(a,b,c,t)=>{$('#k1l').textContent=a;$('#k2l').textContent=b;$('#k3l').textContent=c;$('#tbtit').textContent=t};
+  if(m==='alt')lab('altitude média dos pastos','desnível entre o pasto mais alto e o mais baixo','declive médio dos pastos','Pastos — relevo');
+  else if(lotOn())lab('cabeças nos pastos',CAM==='m12'?'UA/ha — '+mRot():'UA/ha hoje','pastos ocupados','Pastos — lotação do ControlPasto');
+  else lab('NDVI médio dos pastos','variação vs. imagem anterior','área sem nuvem','Pastos na imagem selecionada');
+  // ordem dos cartões da visão geral conforme o que o mapa mostra
+  $('#chcard').hidden=m==='alt';$('#relcard').hidden=m!=='alt';
+  $('#kcard').style.order=0;$('#relcard').style.order=1;$('#cpcard').style.order=lotOn()?1:3;$('#chcard').style.order=2;
 }
 function rowLot(f){const p=f.properties,e=lotDe(p.id);return {f,id:p.id,nome:p.nome,retiro:p.retiro,ha:p.area_ha,lotes:e?.lotes?.map(l=>l[0]).filter(Boolean).join(', ')||'',cab:e?e.cab:null,ua:e?e.ua:null,lot:e?e.lot:null,m12:e?e.m12:null,v:e?(CAM==='m12'?e.m12:e.lot):null}}
-function styleLot(f){const hide=$('#ret').value&&f.properties.retiro!==$('#ret').value;const s=f.properties.id===sel;
-  return {color:s?'#fff':'#f4f1e6',weight:s?3:1,opacity:hide?0.15:0.9,fillOpacity:hide?0:0.78,fillColor:lotCol(lotVal(f.properties.id))}}
+function styleLot(f){const c=contorno(f);
+  return {color:c.color,weight:c.weight,opacity:c.opacity,fillOpacity:c.hide?0:0.85*opv(),fillColor:lotCol(lotVal(f.properties.id))}}
 function tipLot(p){const e=lotDe(p.id);let h=`<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha`;
   if(!e)return h+'<br><i>sem dado do ControlPasto</i>';
   h+=e.cab?`<br>${fmt(e.cab,0)} cab · ${fmt(e.ua,0)} UA · <b>${fmt(e.lot)} UA/ha</b>`:'<br>sem animais hoje (descansando)';
@@ -777,7 +881,7 @@ function refreshLot(){
   $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td style="text-align:left;max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${r.lotes}">${r.lotes||'<span class=muted>—</span>'}</td><td>${r.cab==null?'–':fmt(r.cab,0)}</td><td>${sw(r.lot)}${fmt(r.lot)}</td><td>${sw(r.m12)}${fmt(r.m12)}</td></tr>`).join('');
   $('#tinfo').textContent=`${rows.filter(r=>r.cab>0).length} pastos com animais`;
   layer.setStyle(styleF);labels.clearLayers();
-  if(map.getZoom()>=14)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`${r.nome}<br>${r.v==null?'–':fmt(r.v)}`))}
+  if($('#lnom').checked&&map.getZoom()>=13.5)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`${r.nome}<br>${r.v==null?'–':fmt(r.v)}`))}
   drawChart();drawObras();drawCP();
 }
 const OPCOR=o=>/entr|compra|nasc/i.test(o)?'#2f9e44':/morte|óbito|obito/i.test(o)?'#d6336c':/sa[ií]da|venda|abate/i.test(o)?'#e8590c':/transf/i.test(o)?'#f08c00':/mudan|piquete/i.test(o)?'#1c7ed6':'#868e96';
@@ -801,7 +905,7 @@ function tabelaMovs(ms,comPasto){if(!ms.length)return '<div class="muted">Nenhum
   ms.slice().reverse().slice(0,300).map(m=>`<tr><td style="text-align:left">${fdate(m[0])}</td><td style="text-align:left"><span class="op" style="background:${OPCOR(m[1])}"></span>${esc(m[1])}</td>${comPasto?`<td style="text-align:left">${esc(m[7]||'')}</td>`:''}<td style="text-align:left">${esc(m[2])}</td><td>${m[3]==null?'':fmt(m[3],0)}</td><td>${m[4]?fmt(m[4],0):''}</td><td style="text-align:left;white-space:normal;min-width:90px">${esc([m[5],m[6]].filter(Boolean).join(' · '))}</td></tr>`).join('')+'</tbody></table></div>'}
 const LEGOPS='<div class="muted" style="margin-top:2px"><span style="display:inline-block;width:12px;height:3px;background:#3d73c4;vertical-align:middle"></span> descansando · ▲ movimentações: <span class="op" style="background:#2f9e44"></span>entrada <span class="op" style="background:#1c7ed6"></span>mudança de piquete <span class="op" style="background:#f08c00"></span>transferência <span class="op" style="background:#e8590c"></span>saída <span class="op" style="background:#d6336c"></span>morte</div>';
 function drawCP(){const c=$('#cpcard');
-  if(!LOT){c.hidden=!(LOTERR&&CAM!=='ndvi');if(!c.hidden)c.innerHTML=`<b>Lotação — ControlPasto</b><div class="aviso">${esc(LOTERR)}</div>`;return}
+  if(!LOT){c.hidden=!(LOTERR&&UI.cor==='lot');if(!c.hidden)c.innerHTML=`<b>Lotação — ControlPasto</b><div class="aviso">${esc(LOTERR)}</div>`;return}
   c.hidden=false;const f=sel?GJ.features.find(x=>x.properties.id===sel):null;
   if(f){const p=f.properties,e=lotDe(p.id)||{lotes:[],s:[],cab:0};const ms=LOT.movs[p.id]||[];
     c.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><h3>${esc(p.retiro)} · ${esc(p.nome)} — ControlPasto</h3><span class="muted">${fmt(p.area_ha,1)} ha${e.cp&&e.cp!==p.nome?' · no CP: '+esc(e.cp):''}</span></div>
@@ -826,7 +930,125 @@ function exportaLot(tipo){if(!LOT)return;const P=new Map(GJ.features.map(f=>[f.p
   else{const L=[['fazenda','retiro','pasto','data','operacao','lote','cab','peso_kg','de_para','obs']];
     for(const [id,ms] of Object.entries(LOT.movs)){const p=P.get(id)||{};for(const m of ms)L.push([D.fazenda,p.retiro,p.nome,m[0],m[1],m[2],m[3]??'',csvN(m[4]),m[5],m[6]])}
     csv(`movimentacoes_${FKEY}_${LOT.hoje}.csv`,L)}}
-$('#cam').onchange=()=>{CAM=$('#cam').value;st.set('ndvi_cam',CAM);aplicaCam()};
+
+/* ---------------- interface: o que as cores mostram, camadas, perfil, painel ---------------- */
+let NDVISUB='',altOv=null,hov2d=null;
+const pathLayer=L.layerGroup().addTo(map);
+function efCor(){return UI.cor==='lot'&&LOT?'lot':UI.cor==='alt'&&REL?'alt':'ndvi'}
+function altOn(){return efCor()==='alt'}
+function opv(){return +$('#opac').value/100}
+function ndviOp(){return efCor()==='ndvi'&&UI.modo==='pix'?opv():0}
+function modo3D(){const c=efCor();return c==='ndvi'&&!RAST&&UI.modo!=='med'?'alt':c}
+function tabBtn(t){return document.querySelector(`.tabs [data-t="${t}"]`)}
+function setTab(t){if(tabBtn(t).hidden)t='resumo';UI.tab=t;st.set('ndvi_tab',t);
+  document.querySelectorAll('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
+  document.querySelectorAll('.tab').forEach(s=>s.hidden=s.id!=='t-'+t)}
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>setTab(b.dataset.t));
+function selChip(){const f=sel&&GJ?GJ.features.find(x=>x.properties.id===sel):null;$('#selchip').hidden=!f;
+  if(f)$('#selnome').textContent=`Selecionado: ${f.properties.retiro} · ${f.properties.nome}`}
+$('#selx').onclick=()=>{if(sel)pick(sel)};
+function cabecalho(){const c=efCor();$('#datebox').classList.toggle('off',c!=='ndvi');
+  $('#datebox').title=c==='ndvi'?'Imagem de satélite usada no NDVI':'A data da imagem só vale para o NDVI';
+  $('#sub').textContent=c==='lot'?`Lotação do ControlPasto lida em ${fdate(LOT.atualizado.slice(0,10))} às ${LOT.atualizado.slice(11,16)} · UA = ${fmt(LOT.ua_kg,0)} kg de peso vivo`
+    :c==='alt'?`Relevo ${REL.fonte} (${REL.resolucao_m} m) · altitude de ${fmt(REL.zmin,0)} a ${fmt(REL.zmax,0)} m · curvas a cada ${REL.equidistancia} m`:NDVISUB}
+function estadoControles(){const c=efCor();
+  document.querySelectorAll('#corsw button').forEach(b=>{const k=b.dataset.c;b.setAttribute('aria-pressed',k===c);
+    b.disabled=(k==='lot'&&!LOT)||(k==='alt'&&!REL);
+    b.title=k==='lot'?(LOT?'Lotação dos pastos pelo ControlPasto (UA/ha)':LOTERR||'carregando a lotação…'):k==='alt'?(REL?'Altitude do terreno (relevo)':'O relevo desta fazenda ainda não foi gerado'):'Vigor da vegetação (imagem de satélite da data escolhida)'});
+  $('#lotsw').hidden=c!=='lot';document.querySelectorAll('#lotsw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l===UI.lotm));
+  $('#grpNdvi').hidden=c!=='ndvi';
+  document.querySelectorAll('#modosw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===UI.modo));
+  document.querySelectorAll('#escsw button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.e===ESC));
+  $('#bMed').disabled=!REL;$('#bMed').title=REL?'Marcar pontos no terreno e ver o perfil de altitude e declive':'O relevo desta fazenda ainda não foi gerado'}
+function setCor(c){UI.cor=c;st.set('ndvi_cor',c);CAM=c==='lot'?UI.lotm:'ndvi';aplicaCam()}
+document.querySelectorAll('#corsw button').forEach(b=>b.onclick=()=>setCor(b.dataset.c));
+document.querySelectorAll('#lotsw button').forEach(b=>b.onclick=()=>{UI.lotm=b.dataset.l;st.set('ndvi_lotm',UI.lotm);setCor('lot')});
+document.querySelectorAll('#modosw button').forEach(b=>b.onclick=()=>{UI.modo=b.dataset.m;st.set('ndvi_modo',UI.modo);aplicaCam()});
+document.querySelectorAll('#escsw button').forEach(b=>b.onclick=()=>{ESC=b.dataset.e;st.set('ndvi_esc',ESC);escala();if(RAST)pintar();estadoControles();refresh()});
+/* legenda única, sobre o mapa, para 2D e 3D */
+function legenda(){const c=efCor(),N=$('#legN');
+  if(c==='alt'){const rg=REL.zmax-REL.zmin;$('#legT').textContent='Altitude (m)';
+    $('#bar').style.background=`linear-gradient(90deg,${HIPSO.map(([t,k])=>`rgb(${k}) ${t*100}%`).join(',')})`;
+    $('#ticks').innerHTML=[0,.25,.5,.75,1].map(t=>`<span>${fmt(REL.zmin+rg*t,0)}</span>`).join('');
+    N.textContent='Clique em Perfil para medir altitude e declive ao longo de um caminho.';return}
+  if(c==='lot'){$('#legT').textContent=(CAM==='m12'?'Lotação — '+mRot():'Lotação hoje')+' (UA/ha)';
+    $('#bar').style.background=`linear-gradient(90deg,${LRAMP.map((k,i)=>`rgb(${k}) ${Math.round(i/(LRAMP.length-1)*100)}%`).join(',')})`;
+    $('#ticks').innerHTML=[0,0.5,1,1.5,2,2.5,3].map(v=>`<span>${fmt(v,1)}${v===LOTMAX?'+':''}</span>`).join('');
+    N.innerHTML='<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#3d73c4;vertical-align:-1px"></span> pasto sem animais (descansando)';return}
+  montaLUT();const nt=PALS[PAL].classes?8:5;$('#ticks').innerHTML=[...Array(nt).keys()].map(i=>`<span>${fmt(LO+(HI-LO)*i/(nt-1))}</span>`).join('');
+  $('#legT').textContent=RAST?`NDVI · ${fdate(RAST.data)}${UI.modo==='med'?' · média de cada pasto':''}`:'NDVI';
+  N.textContent=ESC==='fixa'?'Escala fixa: a mesma cor vale o mesmo NDVI em qualquer data.':'Máximo contraste desta imagem: compare datas pelos números, não pelas cores.'}
+/* intensidade das cores e camadas */
+let retexT=0;const retexLogo=()=>{clearTimeout(retexT);retexT=setTimeout(retex3D,250)};
+$('#opac').value=st.get('ndvi_opac')??'90';
+$('#opac').oninput=()=>{st.set('ndvi_opac',$('#opac').value);if(img)img.setOpacity(ndviOp());if(altOv)altOv.setOpacity(opv());if(layer)layer.setStyle(styleF);retexLogo()};
+$('#lsat').checked=st.get('ndvi_sat')!=='0';if($('#lsat').checked)satLayer.addTo(map);
+$('#lsat').onchange=()=>{st.set('ndvi_sat',$('#lsat').checked?'1':'0');if($('#lsat').checked)satLayer.addTo(map);else satLayer.remove()};
+$('#lpas').checked=st.get('ndvi_pas')!=='0';$('#lnom').checked=st.get('ndvi_nom')!=='0';
+$('#lpas').onchange=()=>{st.set('ndvi_pas',$('#lpas').checked?'1':'0');refresh();retex3D()};
+$('#lnom').onchange=()=>{st.set('ndvi_nom',$('#lnom').checked?'1':'0');refresh();retex3D()};
+for(const id of ['#exp','#lay'])document.addEventListener('click',e=>{if(!e.target.closest(id))$(id).open=false});
+/* relevo em 2D: altitude colorida e números por pasto */
+function pintaAlt(){
+  if(!altOn()){if(altOv)altOv.remove();return}
+  if(!altOv){const [w,s,e,n]=REL.bbox;REL.altURL??=(REL.altImg||(REL.altImg=imgAltitude())).toDataURL();altOv=L.imageOverlay(REL.altURL,[[s,w],[n,e]],{pane:'ndvi',interactive:false})}
+  altOv.setOpacity(opv());if(!map.hasLayer(altOv))altOv.addTo(map)}
+function relStats(){if(!REL||!GJ)return {};if(REL.stats&&REL.statsKey===FKEY)return REL.stats;
+  const {W,H,z}=REL,[w,s,e,n]=REL.bbox,[WM,HM]=dimsM(),dx=WM/W,dy=HM/H,out={};
+  for(const f of GJ.features){const b=L.geoJSON(f).getBounds();
+    const i0=Math.max(0,Math.floor((b.getWest()-w)/(e-w)*W)),i1=Math.min(W-1,Math.ceil((b.getEast()-w)/(e-w)*W));
+    const j0=Math.max(0,Math.floor((n-b.getNorth())/(n-s)*H)),j1=Math.min(H-1,Math.ceil((n-b.getSouth())/(n-s)*H));
+    let c=0,sz=0,mn=1e9,mx=-1e9,sg=0;
+    for(let j=j0;j<=j1;j++)for(let i=i0;i<=i1;i++){const lng=w+(i+.5)/W*(e-w),lat=n-(j+.5)/H*(n-s);if(!dentro([lng,lat],f.geometry))continue;
+      const zz=z[j*W+i],zl=z[j*W+Math.max(0,i-1)],zr=z[j*W+Math.min(W-1,i+1)],zu=z[Math.max(0,j-1)*W+i],zd=z[Math.min(H-1,j+1)*W+i];
+      c++;sz+=zz;mn=Math.min(mn,zz);mx=Math.max(mx,zz);sg+=Math.hypot((zr-zl)/(2*dx),(zd-zu)/(2*dy))}
+    if(!c){const ct=b.getCenter(),a=altEm(ct.lat,ct.lng);if(a!=null)out[f.properties.id]={zm:a,zmin:a,zmax:a,amp:0,decl:null};continue}
+    out[f.properties.id]={zm:sz/c,zmin:mn,zmax:mx,amp:mx-mn,decl:sg/c*100}}
+  REL.stats=out;REL.statsKey=FKEY;return out}
+const altCor=z=>{const k=hipso((z-REL.zmin)/Math.max(1,REL.zmax-REL.zmin));return `rgb(${k.map(Math.round)})`};
+function rowAlt(f){const p=f.properties,e=relStats()[p.id]||{};return {f,id:p.id,nome:p.nome,retiro:p.retiro,ha:p.area_ha,zm:e.zm??null,amp:e.amp??null,decl:e.decl??null,zmin:e.zmin,zmax:e.zmax}}
+function styleAlt(f){const c=contorno(f);return {color:c.color,weight:c.weight,opacity:c.opacity,fillOpacity:0}}
+function tipAlt(p){const r=rowAlt({properties:p});return `<b>${p.retiro} · ${p.nome}</b><br>${fmt(p.area_ha,1)} ha<br>altitude média ${fmt(r.zm,0)} m (${fmt(r.zmin,0)} a ${fmt(r.zmax,0)} m)<br>declive médio ${fmt(r.decl,1)}%`}
+function refreshAlt(){
+  const rows=GJ.features.filter(f=>!$('#ret').value||f.properties.retiro===$('#ret').value).map(rowAlt);const ok=rows.filter(r=>r.zm!=null);
+  const ha=ok.reduce((a,r)=>a+r.ha,0);
+  $('#k1').textContent=ha?fmt(ok.reduce((a,r)=>a+r.zm*r.ha,0)/ha,0)+' m':'–';$('#k2').className='';
+  $('#k2').textContent=ok.length?fmt(Math.max(...ok.map(r=>r.zmax))-Math.min(...ok.map(r=>r.zmin)),0)+' m':'–';
+  const okd=ok.filter(r=>r.decl!=null),hd=okd.reduce((a,r)=>a+r.ha,0);$('#k3').textContent=hd?fmt(okd.reduce((a,r)=>a+r.decl*r.ha,0)/hd,1)+'%':'–';
+  $('#escnota').textContent=`Altitude e declive de cada pasto calculados no modelo de terreno ${REL.fonte} (células de ${REL.resolucao_m} m). Declive médio = inclinação média das células do pasto.`;
+  rows.sort((a,b)=>{let x=a[sortK],y=b[sortK];if(x==null)return 1;if(y==null)return -1;if(typeof x==='string')return sortA?x.localeCompare(y,'pt',{numeric:true}):y.localeCompare(x,'pt',{numeric:true});return sortA?x-y:y-x});
+  const sw=z=>z==null?'':`<span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${altCor(z)};margin-right:4px"></span>`;
+  $('#tb').innerHTML=rows.map(r=>`<tr data-id="${r.id}" class="${r.id===sel?'sel':''}"><td>${r.nome}</td><td>${r.retiro}</td><td>${fmt(r.ha,1)}</td><td>${sw(r.zm)}${r.zm==null?'–':fmt(r.zm,0)+' m'}</td><td>${r.amp==null?'–':fmt(r.amp,0)+' m'}</td><td>${r.decl==null?'–':fmt(r.decl,1)+'%'}</td></tr>`).join('');
+  $('#tinfo').textContent=`${rows.length} pastos`;
+  layer.setStyle(styleF);labels.clearLayers();
+  if($('#lnom').checked&&map.getZoom()>=13.5)for(const r of rows){const c=L.geoJSON(r.f).getBounds().getCenter();labels.addLayer(L.tooltip({permanent:true,direction:'center',className:'lbl'}).setLatLng(c).setContent(`${r.nome}<br>${r.zm==null?'–':fmt(r.zm,0)+' m'}`))}
+  drawRel();drawObras()}
+function drawRel(){const c=$('#relcard'),S=relStats();const f=sel?GJ.features.find(x=>x.properties.id===sel):null;
+  if(f){const r=rowAlt(f);c.innerHTML=`<h3>${esc(f.properties.retiro)} · ${esc(f.properties.nome)} — relevo</h3>
+    <div class="kpis"><div class="kpi"><b>${fmt(r.zm,0)} m</b><span>altitude média</span></div><div class="kpi"><b>${fmt(r.amp,0)} m</b><span>desnível (${fmt(r.zmin,0)} a ${fmt(r.zmax,0)} m)</span></div><div class="kpi"><b>${fmt(r.decl,1)}%</b><span>declive médio (${fmt(Math.atan((r.decl||0)/100)*180/Math.PI,1)}°)</span></div></div>
+    <div class="dica">Para ver a subida e a descida de um caminho dentro do pasto, ligue <b>Perfil</b> sobre o mapa e clique nos pontos.</div>`;return}
+  const rows=GJ.features.map(rowAlt).filter(r=>r.decl!=null).sort((a,b)=>b.decl-a.decl).slice(0,8);
+  c.innerHTML=`<h3>${esc(D.fazenda)} — relevo</h3><p class="muted" style="margin:6px 0">Pastos mais inclinados (declive médio):</p>
+    <table><thead><tr><th>Pasto</th><th>Retiro</th><th>declive</th><th>desnível</th></tr></thead><tbody>${rows.map(r=>`<tr data-id="${r.id}"><td>${esc(r.nome)}</td><td>${esc(r.retiro)}</td><td>${fmt(r.decl,1)}%</td><td>${fmt(r.amp,0)} m</td></tr>`).join('')}</tbody></table>
+    <div class="dica" style="margin-top:10px">Clique num pasto para ver o relevo dele, ou ligue <b>Perfil</b> sobre o mapa para medir um caminho.</div>`;
+  c.querySelectorAll('tbody tr').forEach(tr=>tr.onclick=()=>pick(tr.dataset.id))}
+/* leitura sob o cursor (altitude e pasto), igual em 2D e 3D */
+function hudEm(lat,lng){const h=$('#hud');const parts=[];
+  if(lat!=null){const p=pastoEm(lng,lat),a=altEm(lat,lng);if(p)parts.push(`${p.retiro} · ${p.nome}`);if(a!=null)parts.push(`altitude ${fmt(a,0)} m`)}
+  if(UI.medir)parts.push(lat!=null?`clique para marcar o ponto ${PATH.length+1}`:`Perfil ligado: clique no terreno para marcar pontos · Esc desliga`);
+  h.hidden=!parts.length;h.textContent=parts.join(' · ')}
+/* ferramenta de perfil (2D e 3D) */
+function setMedir(on){UI.medir=on;$('#bMed').setAttribute('aria-pressed',on);$('#vista').classList.toggle('medindo',on);map.getContainer().classList.toggle('medindo',on);
+  tabBtn('perfil').hidden=!(on||PATH.length);if(on)setTab('perfil');else if(UI.tab==='perfil'&&!PATH.length)setTab('resumo');hudEm(null)}
+$('#bMed').onclick=()=>setMedir(!UI.medir);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(UI.medir)setMedir(false);$('#lay').open=false;$('#exp').open=false}});
+function desenhaCaminho2D(){pathLayer.clearLayers();if(!PATH.length)return;
+  const pts=(PERFIL?PERFIL.amostras:PATH).map(q=>[q.lat,q.lng]);if(pts.length>1)L.polyline(pts,{color:'#ffd400',weight:3,opacity:.95,interactive:false}).addTo(pathLayer);
+  PATH.forEach((q,i)=>L.marker([q.lat,q.lng],{icon:L.divIcon({className:'pin2d',html:`<span>${i+1}</span>`,iconSize:[0,0]}),interactive:false,keyboard:false}).addTo(pathLayer))}
+/* zoom do 3D com os mesmos botões do mapa */
+$('#z3in').onclick=()=>V3?.zoom(0.75);$('#z3out').onclick=()=>V3?.zoom(1/0.75);$('#z3rst').onclick=()=>V3?.reset();
+$('#ret').addEventListener('change',()=>{if(sel&&!GJ.features.some(f=>f.properties.id===sel&&(!$('#ret').value||f.properties.retiro===$('#ret').value))){sel=null;selChip()}});
+setTab(st.get('ndvi_tab')==='lista'?'lista':'resumo');estadoControles();
 
 gate();
 </script>
