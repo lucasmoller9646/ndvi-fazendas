@@ -16,6 +16,10 @@ on:
         description: "pais (Paraguai inteiro, 100 m) ou detalhe (recorte das fazendas, 45 m)"
         required: false
         default: "pais"
+      cobertura:
+        description: "1 = só a cobertura do solo de referência (Impact Observatory), sem Sentinel Hub"
+        required: false
+        default: "0"
 
 permissions:
   contents: write
@@ -43,11 +47,12 @@ jobs:
           MODO: ${{ github.event.inputs.modo || 'pais' }}
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
-        run: python mapa/paraguai.py
+        run: |
+          if [ "${{ github.event.inputs.cobertura }}" = "1" ]; then python mapa/cobertura.py; else python mapa/paraguai.py; fi
       - name: Gravar no ramo mapa-dados (ou mapa-detalhe), sem histórico
         env:
           GH_TOKEN: ${{ github.token }}
-          RAMO: ${{ github.event.inputs.modo == 'detalhe' && 'mapa-detalhe' || 'mapa-dados' }}
+          RAMO: ${{ format('{0}{1}', github.event.inputs.modo == 'detalhe' && 'mapa-detalhe' || 'mapa-dados', github.event.inputs.cobertura == '1' && '-cobertura' || '') }}
         run: |
           ls -la out
           cd out
