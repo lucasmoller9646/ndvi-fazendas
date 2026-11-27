@@ -1,0 +1,32 @@
+{
+ "modo": "detalhe",
+ "bbox": [
+  -57.25,
+  -23.65,
+  -55.95,
+  -22.1
+ ],
+ "res_deg": 0.0004,
+ "blocos": 2,
+ "px_bloco": [
+  1625,
+  1937
+ ],
+ "periodos": [
+  [
+   "2026-06-15",
+   "2026-09-30"
+  ],
+  [
+   "2025-06-15",
+   "2025-09-30"
+  ],
+  [
+   "2024-06-01",
+   "2024-10-15"
+  ]
+ ],
+ "fonte_s2": "Copernicus Sentinel-2 L2A (ESA)",
+ "fonte_dem": "Copernicus DEM GLO-90 (ESA/Airbus)",
+ "datas": {}
+}
