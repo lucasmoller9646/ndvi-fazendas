@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       so_dem:
-        description: "Só o relevo (1) — não gasta unidades do Sentinel Hub"
+        description: "Só o relevo (1) — não gasta unidades do Sentinel Hub. No modo temas: etapas a refazer, separadas por vírgula"
         required: false
         default: "0"
       modo:
@@ -50,7 +50,11 @@ jobs:
         run: |
           case "${{ github.event.inputs.cobertura }}" in
             1) python mapa/cobertura.py ;;
-            temas) pip install -q pyogrio && python mapa/temas.py ;;
+            temas)
+              pip install -q pyogrio
+              mkdir -p out
+              if git ls-remote --exit-code origin mapa-temas >/dev/null; then git fetch -q --depth 1 origin mapa-temas && git archive origin/mapa-temas | tar -x -C out; fi
+              ETAPAS="${{ github.event.inputs.so_dem }}" python mapa/temas.py ;;
             *) python mapa/paraguai.py ;;
           esac
       - name: Gravar no ramo mapa-dados (ou mapa-detalhe), sem histórico
