@@ -17,7 +17,7 @@ on:
         required: false
         default: "pais"
       cobertura:
-        description: "1 = só a cobertura do solo de referência (Impact Observatory), sem Sentinel Hub"
+        description: "1 = só a cobertura do solo de referência (Impact Observatory); temas = dados dos mapas temáticos"
         required: false
         default: "0"
 
@@ -48,11 +48,15 @@ jobs:
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
         run: |
-          if [ "${{ github.event.inputs.cobertura }}" = "1" ]; then python mapa/cobertura.py; else python mapa/paraguai.py; fi
+          case "${{ github.event.inputs.cobertura }}" in
+            1) python mapa/cobertura.py ;;
+            temas) pip install -q pyogrio && python mapa/temas.py ;;
+            *) python mapa/paraguai.py ;;
+          esac
       - name: Gravar no ramo mapa-dados (ou mapa-detalhe), sem histórico
         env:
           GH_TOKEN: ${{ github.token }}
-          RAMO: ${{ format('{0}{1}', github.event.inputs.modo == 'detalhe' && 'mapa-detalhe' || 'mapa-dados', github.event.inputs.cobertura == '1' && '-cobertura' || '') }}
+          RAMO: ${{ github.event.inputs.cobertura == 'temas' && 'mapa-temas' || format('{0}{1}', github.event.inputs.modo == 'detalhe' && 'mapa-detalhe' || 'mapa-dados', github.event.inputs.cobertura == '1' && '-cobertura' || '') }}
         run: |
           ls -la out
           cd out
