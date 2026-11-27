@@ -10,6 +10,8 @@ Saída em out/ (vai para o ramo "mapa-dados", regravado sem histórico):
   grade.json           bbox, resolução, blocos e datas usadas
 i = coluna (oeste→leste), j = linha (norte→sul).
 
+MODO=detalhe: só o recorte das fazendas (lon -57,25…-55,95 / lat -22,1…-23,65) a 0,0004° (~45 m), 2 x 2 blocos.
+
 Credenciais do Sentinel Hub: CDSE_CLIENT_ID / CDSE_CLIENT_SECRET (as mesmas do NDVI).
 O relevo vem do Microsoft Planetary Computer (público).
 """
@@ -19,10 +21,19 @@ import numpy as np
 import requests
 from PIL import Image
 
-W0, E0, N0, S0 = -63.2, -53.9, -18.9, -28.2
-RES = 0.001
-NT = 4
-TPX = int(round((E0 - W0) / RES / NT))          # 2325
+MODO = os.environ.get('MODO', 'pais')
+if MODO == 'detalhe':      # recorte das fazendas para o mapa de detalhe (~45 m/px)
+    W0, E0, N0, S0 = -57.25, -55.95, -22.1, -23.65
+    RES = 0.0004
+    NT = 2
+    TPXH = int(round((N0 - S0) / RES / NT))
+else:
+    W0, E0, N0, S0 = -63.2, -53.9, -18.9, -28.2
+    RES = 0.001
+    NT = 4
+    TPXH = None
+TPX = int(round((E0 - W0) / RES / NT))          # 2325 no modo país
+TPXH = TPXH or TPX
 OUT = Path(os.environ.get('OUT', 'out')); OUT.mkdir(exist_ok=True)
 SO_DEM = os.environ.get('SO_DEM') == '1'
 
@@ -54,8 +65,8 @@ def auth():
     return {'Authorization': 'Bearer ' + _tok['v']}
 
 def bbox_bloco(i, j):
-    w = W0 + i * TPX * RES; n = N0 - j * TPX * RES
-    return [round(w, 6), round(n - TPX * RES, 6), round(w + TPX * RES, 6), round(n, 6)]
+    w = W0 + i * TPX * RES; n = N0 - j * TPXH * RES
+    return [round(w, 6), round(n - TPXH * RES, 6), round(w + TPX * RES, 6), round(n, 6)]
 
 def s2(bbox, d0, d1):
     import rasterio
@@ -63,7 +74,7 @@ def s2(bbox, d0, d1):
                       'data': [{'type': 'sentinel-2-l2a',
                                 'dataFilter': {'timeRange': {'from': f'{d0}T00:00:00Z', 'to': f'{d1}T23:59:59Z'},
                                                'maxCloudCoverage': 30, 'mosaickingOrder': 'leastCC'}}]},
-            'output': {'width': TPX, 'height': TPX,
+            'output': {'width': TPX, 'height': TPXH,
                        'responses': [{'identifier': 'default', 'format': {'type': 'image/tiff'}}]},
             'evalscript': EVALSCRIPT}
     for k in range(8):
@@ -94,15 +105,15 @@ def dem(bbox):
     from rasterio.vrt import WarpedVRT
     from rasterio.enums import Resampling
     from rasterio.transform import from_bounds
-    T = from_bounds(*bbox, TPX, TPX)
-    z = np.full((TPX, TPX), np.nan, 'float32')
+    T = from_bounds(*bbox, TPX, TPXH)
+    z = np.full((TPXH, TPX), np.nan, 'float32')
     its = pc_get(STAC, params={'collections': 'cop-dem-glo-90', 'bbox': ','.join(map(str, bbox)), 'limit': 100}).json()['features']
     tok = pc_get(PCTOKEN.format('cop-dem-glo-90')).json()['token']
     for it in its:
         href = it['assets']['data']['href']; href += ('&' if '?' in href else '?') + tok
         for k in range(4):
             try:
-                with rasterio.open(href) as src, WarpedVRT(src, crs='EPSG:4326', transform=T, width=TPX, height=TPX,
+                with rasterio.open(href) as src, WarpedVRT(src, crs='EPSG:4326', transform=T, width=TPX, height=TPXH,
                                                           resampling=Resampling.bilinear, src_nodata=src.nodata,
                                                           nodata=np.nan) as v:
                     d = v.read(1).astype('float32')
@@ -116,7 +127,7 @@ def dem(bbox):
     return z
 
 def main():
-    meta = {'bbox': [W0, S0, E0, N0], 'res_deg': RES, 'blocos': NT, 'px_bloco': TPX,
+    meta = {'modo': MODO, 'bbox': [W0, S0, E0, N0], 'res_deg': RES, 'blocos': NT, 'px_bloco': [TPX, TPXH],
             'periodos': PERIODOS, 'fonte_s2': 'Copernicus Sentinel-2 L2A (ESA)', 'fonte_dem': 'Copernicus DEM GLO-90 (ESA/Airbus)',
             'datas': {}}
     os.environ.setdefault('GDAL_DISABLE_READDIR_ON_OPEN', 'EMPTY_DIR')

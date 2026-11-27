@@ -5,13 +5,17 @@ name: Mapa de parede do Paraguai (dados)
 on:
   push:
     branches: [main]
-    paths: ["mapa/**", ".github/workflows/mapa.yml"]
+    paths: ["mapa/**"]
   workflow_dispatch:
     inputs:
       so_dem:
         description: "Só o relevo (1) — não gasta unidades do Sentinel Hub"
         required: false
         default: "0"
+      modo:
+        description: "pais (Paraguai inteiro, 100 m) ou detalhe (recorte das fazendas, 45 m)"
+        required: false
+        default: "pais"
 
 permissions:
   contents: write
@@ -36,16 +40,18 @@ jobs:
           PYTHONUNBUFFERED: "1"
           OUT: out
           SO_DEM: ${{ github.event.inputs.so_dem }}
+          MODO: ${{ github.event.inputs.modo || 'pais' }}
           CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
           CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
         run: python mapa/paraguai.py
-      - name: Gravar no ramo mapa-dados (sem histórico)
+      - name: Gravar no ramo mapa-dados (ou mapa-detalhe), sem histórico
         env:
           GH_TOKEN: ${{ github.token }}
+          RAMO: ${{ github.event.inputs.modo == 'detalhe' && 'mapa-detalhe' || 'mapa-dados' }}
         run: |
           ls -la out
           cd out
-          git init -q -b mapa-dados
+          git init -q -b "$RAMO"
           git add -A
           git -c user.name=mapa-bot -c user.email=mapa-bot@users.noreply.github.com commit -qm "dados do mapa do Paraguai $(date -u +%F)"
-          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" mapa-dados
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$RAMO"
