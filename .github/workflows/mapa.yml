@@ -1,0 +1,51 @@
+name: Mapa de parede do Paraguai (dados)
+
+# Gera o mosaico Sentinel-2 (época seca) e o relevo do Paraguai inteiro para o mapa A0 do escritório.
+# Roda só quando o script muda ou pelo botão "Run workflow"; não interfere no NDVI.
+on:
+  push:
+    branches: [main]
+    paths: ["mapa/**", ".github/workflows/mapa.yml"]
+  workflow_dispatch:
+    inputs:
+      so_dem:
+        description: "Só o relevo (1) — não gasta unidades do Sentinel Hub"
+        required: false
+        default: "0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mapa
+  cancel-in-progress: false
+
+jobs:
+  dados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Baixar mosaico Sentinel-2 e relevo
+        env:
+          PYTHONUNBUFFERED: "1"
+          OUT: out
+          SO_DEM: ${{ github.event.inputs.so_dem }}
+          CDSE_CLIENT_ID: ${{ secrets.CDSE_CLIENT_ID }}
+          CDSE_CLIENT_SECRET: ${{ secrets.CDSE_CLIENT_SECRET }}
+        run: python mapa/paraguai.py
+      - name: Gravar no ramo mapa-dados (sem histórico)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -la out
+          cd out
+          git init -q -b mapa-dados
+          git add -A
+          git -c user.name=mapa-bot -c user.email=mapa-bot@users.noreply.github.com commit -qm "dados do mapa do Paraguai $(date -u +%F)"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" mapa-dados
